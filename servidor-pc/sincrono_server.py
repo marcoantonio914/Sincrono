@@ -11,11 +11,12 @@ biblioteca padrão do Python (3.8+). Se o pacote `zeroconf` estiver instalado
 (pip install zeroconf), o servidor também se anuncia na rede e aparece na lista "Sessões
 encontradas" do app.
 
-Painel do anfitrião (grupos, arquivos, volumes, metrônomo):  http://localhost:3000/admin
+Tudo fica numa página só (http://localhost:3000): ao abrir neste computador ela pergunta se você quer
+"Ser anfitrião" (grupos, arquivos, volumes, calibração, QR code) ou "Entrar em uma sessão" (como no app).
 
 Limitações desta versão (honestas):
-  * Calibração automática por cabo com interface de áudio multicanal (veja calibracao_cabo.py;
-    precisa de numpy e sounddevice). Sem elas, use o ajuste fino manual.
+  * Calibração por cabo, pela mesa de som (veja calibracao_cabo.py; precisa de numpy e sounddevice).
+    Sem elas, use o ajuste fino manual. Não testada com mesa de verdade, só com gravação simulada.
   * O servidor em si não toca som. O computador toca pela PÁGINA aberta no navegador dele
     (o servidor abre http://localhost:PORTA/ sozinho em Chrome/Edge com o som liberado; em outro navegador, clique uma vez em "Ativar som").
 """
@@ -384,7 +385,6 @@ class Session:
 
 SESSION = None
 WEB_DIR = None
-ADMIN_HTML = Path(__file__).with_name("admin.html")
 
 
 def query_of(path):
@@ -403,6 +403,10 @@ class Handler(BaseHTTPRequestHandler):
         return super().parse_request()
 
     # ---- utilidades
+    def _is_local(self):
+        """Pedido vindo deste mesmo computador (o anfitrião), e não de outro aparelho da rede."""
+        return self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
     def _json(self, status, obj):
         data = (obj if isinstance(obj, str) else json.dumps(obj)).encode("utf-8")
         self.send_response(status)
@@ -520,18 +524,26 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/info":
             port = self.server.server_address[1]
             urls = ["http://%s:%d" % (ip, port) for ip in lan_addresses()] or ["http://127.0.0.1:%d" % port]
-            return self._json(200, {"host": "pc", "upload": True, "urls": urls})
+            return self._json(200, {"host": "pc", "upload": True, "urls": urls, "local": self._is_local(),
+                                    "calibration": CABLE is not None})
         if path == "/api/devices":
             return self._json(200, s.devices_json())
+        if path == "/api/discover":
+            items, available = discover(self.server.server_address[1])
+            return self._json(200, {"sessions": items, "available": available})
         if path.startswith("/api/calib"):
-            if q.get("device") != "admin-panel":
+            if path == "/api/calib":
                 s.seen(q.get("device"), q.get("name"))
             if CABLE is None:
                 return self._json(404, {"error": "Este servidor não oferece calibração automática (falta numpy)."})
-            status, reply = CABLE.handle("GET", path, q, None)
+            status, reply = CABLE.handle("GET", path, q, None, local=self._is_local())
             return self._json(status, reply)
-        if path == "/admin":
-            return self._file(ADMIN_HTML, "text/html; charset=utf-8")
+        if path == "/admin":  # o painel agora é a própria página inicial
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path.startswith("/api/"):
             return self._json(404, {"error": "Não encontrado."})
         return self._asset(path)
@@ -554,7 +566,7 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/calib"):
             if CABLE is None:
                 return self._json(404, {"error": "Este servidor não oferece calibração automática (falta numpy)."})
-            status, reply = CABLE.handle("POST", path, q, body)
+            status, reply = CABLE.handle("POST", path, q, body, local=self._is_local())
             return self._json(status, reply)
         if path == "/api/command":
             status, reply = s.command(body)
@@ -652,6 +664,47 @@ def lan_addresses():
     return found
 
 
+def discover(own_port, wait=2.0):
+    """Sessões do Sincrono na rede (celulares anfitriões ou outros computadores), via mDNS. (lista, disponível?)"""
+    try:
+        from zeroconf import ServiceBrowser, Zeroconf
+    except ImportError:
+        return [], False
+    own = set(lan_addresses()) | {"127.0.0.1"}
+    found = {}
+
+    class Listener:
+        def add_service(self, zc, type_, name):
+            try:
+                info = zc.get_service_info(type_, name, timeout=1500)
+                if not info:
+                    return
+                for addr in info.parsed_addresses():
+                    if ":" in addr:
+                        continue  # só IPv4
+                    if addr in own and info.port == own_port:
+                        return  # esta própria sessão
+                    label = name.replace("._metronomo._tcp.local.", "")
+                    found[name] = {"name": label, "url": "http://%s:%d" % (addr, info.port)}
+                    return
+            except Exception:
+                pass
+
+        def update_service(self, zc, type_, name):
+            pass
+
+        def remove_service(self, zc, type_, name):
+            pass
+
+    zc = Zeroconf()
+    try:
+        ServiceBrowser(zc, "_metronomo._tcp.local.", Listener())
+        time.sleep(wait)
+    finally:
+        zc.close()
+    return sorted(found.values(), key=lambda x: x["name"]), True
+
+
 def announce(port):
     try:
         from zeroconf import ServiceInfo, Zeroconf
@@ -738,19 +791,16 @@ def main():
     SESSION = Session(args.cache)
     if calibracao_cabo is not None and calibracao_cabo.np is not None:
         CABLE = calibracao_cabo.CableCalibration(now_ms)
-        print("  calibração por cabo (interface multicanal): disponível no painel /admin")
+        pass
     else:
-        print("  calibração por cabo: indisponível (pip install numpy sounddevice)")
+        print("  (calibração indisponível: pip install numpy sounddevice)")
     WEB_DIR = find_web_dir(args.web)
 
     httpd = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     httpd.daemon_threads = True
     httpd.request_queue_size = 512  # muitos aparelhos entrando ao mesmo tempo
     port = httpd.server_address[1]
-    print("Sincrono (servidor no computador) — porta %d" % port)
-    for ip in lan_addresses() or ["127.0.0.1"]:
-        print("  celulares e navegadores:  http://%s:%d" % (ip, port))
-    print("  painel do anfitrião:      http://localhost:%d/admin" % port)
+    print("Sincrono aberto em http://localhost:%d  (deixe esta janela do terminal aberta)" % port)
     if WEB_DIR is None:
         print("  AVISO: pasta da página web não encontrada; use --web.")
     zc = announce(port)

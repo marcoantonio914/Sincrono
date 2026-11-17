@@ -653,14 +653,16 @@ private fun CalibrationSection(ui: UiState, playing: Boolean) {
     var pendingPartner by remember { mutableStateOf<String?>(null) }
     // Modo cabo: os aparelhos ligam a saída de fone a uma mesa de som e este aparelho grava a saída da mesa.
     var cable by remember { mutableStateOf(false) }
+    // Opções avançadas (modo cabo e calibrar só este aparelho) ficam escondidas: o caminho simples é o botão grande.
+    var advanced by remember { mutableStateOf(false) }
     // Inicia mesmo sem a permissão: o aparelho ainda toca o som, só não grava.
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        SessionController.startCalibration(pendingPartner, cable)
+        SessionController.startCalibration(pendingPartner, cable && advanced)
     }
 
     fun begin(partnerId: String?) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            SessionController.startCalibration(partnerId, cable)
+            SessionController.startCalibration(partnerId, cable && advanced)
         } else {
             pendingPartner = partnerId
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -684,11 +686,13 @@ private fun CalibrationSection(ui: UiState, playing: Boolean) {
                     "A calibração substitui o ajuste manual da saída em uso.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (advanced) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Switch(checked = cable, onCheckedChange = { cable = it }, enabled = !busy)
                 Text("Calibração por cabo (mesa de som)", modifier = Modifier.weight(1f))
             }
-            if (cable) {
+            if (!advanced) {
+                // Sem opções: o botão abaixo calibra todos os aparelhos.
+            } else if (cable) {
                 Text(
                     "Modo cabo: ligue a saída de fone de CADA aparelho (inclusive o anfitrião e este) a um canal da mesa. " +
                         "Ligue a saída principal da mesa (com o ganho no mínimo, ou um atenuador) à entrada de microfone deste aparelho: " +
@@ -710,8 +714,12 @@ private fun CalibrationSection(ui: UiState, playing: Boolean) {
                     .fillMaxWidth()
                     .height(56.dp),
             ) { Text(if (playing) "Pause o metrônomo para calibrar" else "Calibrar todos os aparelhos") }
+            OutlinedButton(
+                onClick = { advanced = !advanced },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (advanced) "Ocultar opções avançadas" else "Opções avançadas (cabo, só este aparelho)") }
 
-            if (!isHost) {
+            if (advanced && !isHost) {
                 if (pairPartners.isEmpty()) {
                     Text(
                         "Para calibrar só este aparelho (sem refazer os outros), é preciso o anfitrião ou outro aparelho já calibrado na sessão.",

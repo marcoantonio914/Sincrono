@@ -9,6 +9,22 @@
     <title>Sincrono</title>
   </head>
   <body>
+    <section id="start-screen" hidden>
+      <div class="start-card">
+        <h1>Sincrono</h1>
+        <p>Como você quer usar este computador?</p>
+        <button id="start-host" type="button" class="primary big">Ser anfitrião</button>
+        <p class="hint">Este computador comanda a sessão: metrônomo, músicas, grupos e calibração. Os celulares entram nele.</p>
+        <button id="start-join" type="button" class="big">Entrar em uma sessão</button>
+        <div id="join-box" hidden>
+          <p class="hint" id="join-found">Procurando sessões na rede…</p>
+          <div id="join-list"></div>
+          <label>Ou digite o endereço <input id="join-addr" placeholder="192.168.0.12:3000" inputmode="url"></label>
+          <button id="join-go" type="button" class="primary">Entrar</button>
+          <p class="hint" id="join-error"></p>
+        </div>
+      </div>
+    </section>
     <main>
       <header class="top">
         <h1>Sincrono</h1>
@@ -93,12 +109,23 @@
         <p class="hint">No celular, abra o app e toque em "Ler QR code" (ou aponte a câmera para abrir no navegador).</p>
         <canvas id="qr" aria-label="QR code do endereço da sessão"></canvas>
         <p id="invite-urls"></p>
+        <button id="leave-session" type="button" hidden>Sair desta sessão</button>
       </section>
       </div>
       <div class="tab" data-tab="sync">
+      <section id="host-calib" class="offset" aria-label="Calibrar" hidden>
+        <h2>Calibrar todos os aparelhos</h2>
+        <p class="hint" id="host-calib-hint"></p>
+        <button id="calib-start" type="button" class="primary big">Calibrar todos os aparelhos</button>
+        <p id="calib-start-msg" aria-live="polite"></p>
+        <details id="calib-advanced" hidden>
+          <summary>Avançado</summary>
+          <label>Entrada de áudio do computador <select id="calib-iface"><option value="">Automática</option></select></label>
+        </details>
+      </section>
       <section id="calibration" class="offset" aria-label="Calibração automática">
-        <h2>Calibração automática</h2>
-        <p class="hint">Um celular com o app novo inicia a calibração. Deixe esta aba aberta e visível, com o som ligado em volume médio e as caixas voltadas para o microfone desse celular. Não use fones.</p>
+        <h2>Resultado da calibração</h2>
+        <p class="hint" id="calib-hint">Um celular com o app novo inicia a calibração. Deixe esta aba aberta e visível, com o som ligado em volume médio e as caixas voltadas para o microfone desse celular. Não use fones.</p>
         <button id="calib-audio" type="button">Ativar áudio deste aparelho</button>
         <p id="calib-status" aria-live="polite"></p>
         <ul id="calib-lines"></ul>

@@ -50,3 +50,16 @@ select { min-height: 40px; border: 1px solid var(--recessed); border-radius: 4px
 #qr { width: min(100%, 260px); height: auto; image-rendering: pixelated; border: 1px solid var(--recessed); border-radius: 4px; }
 #invite-urls { word-break: break-all; font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) { main { width: min(100%, 560px); } }
+
+/* tela inicial do computador: ser anfitrião ou entrar */
+#start-screen { position: fixed; inset: 0; z-index: 10; background: var(--canvas); display: grid; place-items: center; padding: 16px; overflow: auto; }
+#start-screen[hidden] { display: none !important; }
+.start-card { width: min(100%, 420px); display: grid; gap: 12px; }
+.start-card p { margin: 0; }
+button.big { min-height: 56px; font-size: 1.05rem; }
+#join-box { display: grid; gap: 10px; }
+#join-box[hidden] { display: none !important; }
+#join-list { display: grid; gap: 8px; }
+#host-calib[hidden], #leave-session[hidden], #calib-advanced[hidden] { display: none !important; }
+#host-calib details { margin-top: 8px; }
+#calib-start-msg { font-weight: 600; }

@@ -1,21 +1,18 @@
-"""Calibração por cabo com interface de áudio multicanal (ex.: Teyun Q-12, 2 canais; ou 8, 16 canais...).
+"""Calibração por cabo, com a mesa de som somando todos os aparelhos (um botão só).
 
 Como funciona
-  * Cada aparelho (celular ou página do navegador) é ligado por cabo a UMA entrada da interface.
-  * Os aparelhos tocam um "chirp" (2–6 kHz, 40 ms; o mesmo da calibração acústica) nos horários
-    combinados, cada um no seu slot. A interface grava todos os canais ao mesmo tempo.
-  * Para cada canal, medimos o instante exato em que o chirp chegou (filtro casado + envelope +
-    interpolação parabólica). Como todos os canais compartilham o relógio da interface, a
-    diferença entre canais é a diferença de latência entre os aparelhos.
-  * A referência é um aparelho escolhido (normalmente a página do próprio computador, ligada a
-    um canal): o ajuste de cada aparelho = (chegada dele - horário combinado) - (o mesmo da
-    referência). O atraso de entrada da interface e o horário de início da gravação cancelam.
-
-Com N canais, N aparelhos são medidos numa única rodada. Mais aparelhos que canais: o painel
-pede rodadas, trocando os cabos entre elas (cada rodada mede até N aparelhos + a referência).
+  * A saída de fone de cada aparelho (celulares, o computador) vai por cabo a uma entrada da mesa.
+    A mesa soma tudo e entrega ao computador pelo USB (ou por uma entrada de linha).
+  * Todos os aparelhos tocam um "chirp" (2–6 kHz, 40 ms), cada um no seu horário combinado (slot).
+    Como só um toca por vez, quem gravar sabe de quem é cada som pelo horário: não precisa de um
+    canal por aparelho nem de configurar nada.
+  * O computador grava, mede o instante exato de chegada de cada chirp (filtro casado + envelope +
+    interpolação parabólica) e compara com a referência: a página do próprio computador (o anfitrião),
+    que também vai por cabo. O atraso de entrada da interface e o início da gravação cancelam.
+  * Cada aparelho recebe o seu ajuste e o aplica sozinho (mesmo protocolo /api/calib dos apps).
 
 Dependências (só para calibrar): numpy e sounddevice (pip install numpy sounddevice).
-O servidor continua funcionando sem elas; só a calibração por cabo fica indisponível.
+O servidor continua funcionando sem elas; só a calibração fica indisponível.
 """
 import json
 import threading
@@ -87,38 +84,48 @@ def detect_arrival(x, sample_rate, center_index, before, after):
     return lo + k + frac, ratio
 
 
-def analyze(recording, sample_rate, rec_start_ms, channel_plan, repeats=REPEATS):
-    """Analisa uma gravação multicanal.
+def analyze(recording, sample_rate, rec_start_ms, plan, repeats=REPEATS):
+    """Analisa uma gravação.
 
-    recording: array (amostras, canais), valores -1..1
-    rec_start_ms: horário (relógio do servidor) do 1º quadro gravado (só precisa ser coerente entre canais)
-    channel_plan: {canal(0-based): [horários combinados (ms) dos chirps desse canal]}
-    Devolve {canal: dict(ok, offsetMs (bruto: chegada - combinado), spreadMs, count, peak, clipped, erro)}.
+    recording: array (amostras,) ou (amostras, canais), valores -1..1
+    rec_start_ms: horário (relógio do servidor) do 1º quadro gravado (só precisa ser coerente)
+    plan: {chave: [horários combinados (ms) dos chirps dessa chave]}. A chave é o número do canal
+          (recording 2D) ou qualquer nome, p.ex. o id do aparelho (recording 1D = mistura somada).
+    Devolve {chave: dict(ok, offsetMs (bruto: chegada - combinado), spreadMs, count, peak, clipped, error)}.
     """
     out = {}
-    for ch, times in channel_plan.items():
+    before = SEARCH_BEFORE_MS * sample_rate / 1000.0
+    after = SEARCH_AFTER_MS * sample_rate / 1000.0
+    dur = int(DURATION * sample_rate)
+    for key, times in plan.items():
         info = dict(ok=False, offsetMs=0.0, spreadMs=0.0, count=0, peak=0.0, clipped=False, error="")
-        out[ch] = info
+        out[key] = info
         if recording.ndim == 1:
             x = recording
-        elif ch >= recording.shape[1]:
+        elif not isinstance(key, int) or key >= recording.shape[1]:
             info["error"] = "a interface não tem este canal"
             continue
         else:
-            x = recording[:, ch]
-        info["peak"] = float(np.max(np.abs(x))) if len(x) else 0.0
-        info["clipped"] = info["peak"] >= CLIP_PEAK
+            x = recording[:, key]
+        # nível só nas janelas deste aparelho (na mistura, os outros tocam em outros horários)
+        peak = 0.0
+        for t in times:
+            c = (t - rec_start_ms) * sample_rate / 1000.0
+            lo, hi = max(0, int(c - before)), min(len(x), int(c + after) + dur)
+            if hi > lo:
+                peak = max(peak, float(np.max(np.abs(x[lo:hi]))))
+        info["peak"] = peak
+        info["clipped"] = peak >= CLIP_PEAK
         if info["clipped"]:
-            info["error"] = "sinal saturou (estourou): diminua o ganho da interface ou o volume do aparelho"
+            info["error"] = "o sinal estourou: abaixe o volume deste aparelho ou o ganho da mesa"
             continue
-        if info["peak"] < MIN_PEAK:
-            info["error"] = "quase nenhum sinal neste canal: confira o cabo, o ganho e o volume"
+        if peak < MIN_PEAK:
+            info["error"] = "não chegou som deste aparelho: confira o cabo, o volume e se o app está aberto com o som ativo"
             continue
         offsets = []
         for t in times:
             center = (t - rec_start_ms) * sample_rate / 1000.0
-            found = detect_arrival(x, sample_rate, center, SEARCH_BEFORE_MS * sample_rate / 1000.0,
-                                   SEARCH_AFTER_MS * sample_rate / 1000.0)
+            found = detect_arrival(x, sample_rate, center, before, after)
             if found is None:
                 continue
             idx, ratio = found
@@ -128,7 +135,7 @@ def analyze(recording, sample_rate, rec_start_ms, channel_plan, repeats=REPEATS)
             offsets.append(arrival_ms - t)
         info["count"] = len(offsets)
         if len(offsets) < max(2, (repeats + 1) // 2 + 1):
-            info["error"] = "o som do aparelho não foi detectado de forma confiável neste canal"
+            info["error"] = "o som deste aparelho chegou fraco ou instável: aumente um pouco o volume e fique em silêncio"
             continue
         offsets.sort()
         mid = len(offsets) // 2
@@ -146,12 +153,12 @@ def quality(spread_ms, count, repeats=REPEATS):
 
 
 def solve(plan_results, reference_channel):
-    """plan_results: saída de analyze(). Devolve {canal: dict(offsetMs relativo à referência, spreadMs, quality, count)}
+    """plan_results: saída de analyze(). Devolve {chave: dict(offsetMs relativo à referência, spreadMs, quality, count)}
     ou levanta ValueError se a referência não foi medida."""
     ref = plan_results.get(reference_channel)
     if not ref or not ref["ok"]:
-        raise ValueError("A referência (o computador ligado à interface) não foi medida: "
-                         + ((ref or {}).get("error") or "confira o cabo dela"))
+        raise ValueError("O som deste computador (a referência) não foi medido: "
+                         + ((ref or {}).get("error") or "confira o cabo dele até a mesa"))
     out = {}
     for ch, r in plan_results.items():
         if not r["ok"]:
@@ -165,6 +172,9 @@ def solve(plan_results, reference_channel):
 # ----------------------------------------------------------------------------------------------
 # Gravação (sounddevice) — separada para poder ser trocada por uma simulação nos testes.
 
+VIRTUAL_INPUTS = ("pipewire", "pulse", "default", "sysdefault")
+
+
 def list_interfaces():
     try:
         import sounddevice as sd
@@ -174,26 +184,53 @@ def list_interfaces():
     for i, d in enumerate(sd.query_devices()):
         if d.get("max_input_channels", 0) > 0:
             ch = d["max_input_channels"]
-            if d["name"] in ("pipewire", "pulse", "default", "sysdefault"):
-                ch = min(ch, 2)  # servidores de som mostram dezenas de canais virtuais; a interface real tem poucos
+            if d["name"] in VIRTUAL_INPUTS:
+                ch = min(ch, 2)  # servidores de som mostram dezenas de canais virtuais
             items.append({"index": i, "name": d["name"], "channels": ch,
                           "sampleRate": int(d.get("default_samplerate") or 48000)})
     return items, ""
 
 
-def record_with_sounddevice(device_index, channels, duration_s, now_ms):
-    """Grava `channels` canais por duration_s. Devolve (array, sample_rate, rec_start_ms)."""
+def input_candidates(sd):
+    """Ordem automática: interfaces USB (a mesa) primeiro, depois os servidores de som do sistema."""
+    devs = sd.query_devices()
+    usb, virtual, rest = [], [], []
+    for i, d in enumerate(devs):
+        if d.get("max_input_channels", 0) <= 0:
+            continue
+        name = d["name"].lower()
+        if d["name"] in VIRTUAL_INPUTS:
+            virtual.append(i)
+        elif "usb" in name:
+            usb.append(i)
+        else:
+            rest.append(i)
+    virtual.sort(key=lambda i: VIRTUAL_INPUTS.index(devs[i]["name"]))
+    return usb + virtual + rest
+
+
+def record_with_sounddevice(device_index, duration_s, now_ms):
+    """Grava duration_s segundos. device_index None = automático. Devolve (array, sample_rate, rec_start_ms)."""
     import sounddevice as sd
-    info = sd.query_devices(device_index)
-    sr = int(info.get("default_samplerate") or 48000)
-    start_ms = now_ms()
-    data = sd.rec(int(duration_s * sr), samplerate=sr, channels=channels, device=device_index, dtype="float32")
-    sd.wait()
-    return data, sr, start_ms
+    candidates = [device_index] if device_index is not None else input_candidates(sd)
+    last_error = None
+    for idx in candidates:
+        info = sd.query_devices(idx)
+        channels = info["max_input_channels"]
+        channels = min(channels, 2) if info["name"] in VIRTUAL_INPUTS else min(channels, 16)
+        sr = int(info.get("default_samplerate") or 48000)
+        try:
+            start_ms = now_ms()
+            data = sd.rec(int(duration_s * sr), samplerate=sr, channels=max(channels, 1), device=idx, dtype="float32")
+            sd.wait()
+            return data, sr, start_ms
+        except Exception as e:  # dispositivo ocupado etc.: tenta o próximo
+            last_error = e
+    raise RuntimeError("Não consegui gravar do computador (%s). Confira se a mesa está ligada por USB." % (last_error or "nenhuma entrada de áudio"))
 
 
 class CableCalibration:
-    """Sessão de calibração por cabo no servidor do computador (mesmo protocolo /api/calib dos apps)."""
+    """Calibração no servidor do computador (mesmo protocolo /api/calib dos apps). Um botão: calibra todos."""
 
     HOST_ID = "pc-host"
 
@@ -201,28 +238,25 @@ class CableCalibration:
         self.now_ms = now_ms
         self.recorder = recorder or record_with_sounddevice
         self.lock = threading.RLock()
-        self.peers = {}          # device -> dict(name, seen, auto, cal)
-        self.channel_of = {}     # device -> canal (0-based)
-        self.reference = ""      # device de referência
-        self.interface_index = None
-        self.interface_channels = 0
+        self.peers = {}          # device -> dict(name, seen, auto, cal, local)
+        self.interface_index = None   # None = automática
         self.id = 0
         self.state = "idle"
         self.message = ""
         self.start_at = 0
         self.devices = []        # [(id, name)] — referência primeiro
         self.results = {}
-        self.last_detail = {}
 
-    # ---- protocolo
-    def register(self, q):
+    # ---- aparelhos
+    def register(self, q, local=False):
         device = q.get("device", "")
         if not device:
             return
         with self.lock:
-            p = self.peers.setdefault(device, {"name": "Aparelho", "seen": 0.0, "auto": 0.0, "cal": False})
+            p = self.peers.setdefault(device, {"name": "Aparelho", "seen": 0.0, "auto": 0.0, "cal": False, "local": False})
             p["name"] = q.get("name") or "Aparelho"
             p["seen"] = self.now_ms()
+            p["local"] = bool(local)
             try:
                 p["auto"] = float(q.get("auto", 0) or 0)
             except ValueError:
@@ -233,125 +267,104 @@ class CableCalibration:
         now = self.now_ms()
         return {k: v for k, v in self.peers.items() if now - v["seen"] < PEER_TTL_MS}
 
+    def reference_id(self):
+        """A página deste computador (a mais recente) é a referência: o anfitrião."""
+        local = [(v["seen"], k) for k, v in self.live().items() if v["local"]]
+        return max(local)[1] if local else ""
+
+    # ---- protocolo
     def session_json(self):
         with self.lock:
             live = self.live()
+            ref = self.reference_id()
             return {
                 "id": self.id, "state": self.state, "mode": "all", "cable": True, "amp": CABLE_AMPLITUDE,
                 "startAt": self.start_at, "slotMs": SLOT_MS, "repeats": REPEATS,
                 "host": self.HOST_ID, "recorder": self.HOST_ID, "target": "", "recorders": [],
                 "devices": [{"id": i, "name": n} for i, n in self.devices],
-                "peers": [{"id": k, "name": v["name"], "host": False, "calibrated": v["cal"], "canRecord": False,
-                           "route": "", "channel": self.channel_of.get(k, -1), "reference": k == self.reference}
-                          for k, v in live.items()],
+                "peers": [{"id": k, "name": v["name"], "host": k == ref, "calibrated": v["cal"], "canRecord": False,
+                           "route": "", "reference": k == ref} for k, v in live.items()],
                 "results": self.results, "message": self.message,
-                "interface": {"index": self.interface_index, "channels": self.interface_channels},
+                "interface": self.interface_index,
             }
 
-    def handle(self, method, path, query, body):
+    def handle(self, method, path, query, body, local=False):
         """Devolve (status, dict)."""
         with self.lock:
             if method == "GET" and path == "/api/calib":
-                self.register(query)
+                self.register(query, local)
                 return 200, self.session_json()
             if method == "GET" and path == "/api/calib/interfaces":
                 items, err = list_interfaces()
-                return 200, {"interfaces": items, "error": err}
-            if method == "POST" and path == "/api/calib/map":
-                return self._set_map(body or {})
+                return 200, {"interfaces": items, "selected": self.interface_index, "error": err}
+            if method == "POST" and path == "/api/calib/interface":
+                idx = (body or {}).get("index")
+                self.interface_index = int(idx) if idx not in (None, "", "auto") else None
+                return 200, self.session_json()
             if method == "POST" and path == "/api/calib/start":
                 return self._start()
             if method == "POST" and path == "/api/calib/result":
                 return 200, self.session_json()  # só o computador grava; apps não enviam resultado
         return 404, {"error": "Não encontrado."}
 
-    def _set_map(self, body):
-        ch = body.get("channels", {})
-        if not isinstance(ch, dict):
-            return 400, {"error": "Formato inválido."}
-        clean = {}
-        for dev, c in ch.items():
-            try:
-                c = int(c)
-            except (TypeError, ValueError):
-                continue
-            if c >= 0:
-                clean[str(dev)] = c
-        if len(set(clean.values())) != len(clean):
-            return 400, {"error": "Dois aparelhos no mesmo canal. Cada aparelho precisa de um canal próprio."}
-        self.channel_of = clean
-        self.reference = str(body.get("reference") or "")
-        if "interface" in body:
-            self.interface_index = body["interface"]
-        if "interfaceChannels" in body:
-            try:
-                self.interface_channels = int(body["interfaceChannels"])
-            except (TypeError, ValueError):
-                pass
-        return 200, self.session_json()
-
     def _start(self):
         if self.state == "running":
             return 400, {"error": "Já existe uma calibração em andamento."}
         if np is None:
             return 400, {"error": "Falta o numpy. Rode: pip install numpy sounddevice"}
+        if self.recorder is record_with_sounddevice:
+            try:
+                import sounddevice  # noqa: F401
+            except Exception:
+                return 400, {"error": "Falta o sounddevice. Rode: pip install sounddevice (no Linux: sudo apt install libportaudio2)"}
         live = self.live()
-        mapped = [d for d in self.channel_of if d in live]
-        if self.reference not in mapped:
-            return 400, {"error": "Escolha a referência (normalmente a página deste computador) e ligue-a a um canal."}
-        if len(mapped) < 2:
-            return 400, {"error": "Ligue pelo menos um outro aparelho a um canal da interface."}
-        if self.interface_index is None:
-            return 400, {"error": "Escolha a interface de áudio."}
-        if max(self.channel_of[d] for d in mapped) >= max(self.interface_channels, 1):
-            return 400, {"error": "Há aparelho ligado a um canal que a interface não tem."}
-        ordered = [self.reference] + [d for d in mapped if d != self.reference]
-        self.devices = [(d, live[d]["name"]) for d in ordered]
+        ref = self.reference_id()
+        if not ref:
+            return 400, {"error": "Abra o Sincrono neste computador: a página dele é a referência da calibração."}
+        others = sorted(((v["name"], k) for k, v in live.items() if k != ref and not v["local"]))
+        if not others:
+            return 400, {"error": "Nenhum outro aparelho conectado. Abra o app nos celulares e entre nesta sessão."}
+        self.devices = [(ref, live[ref]["name"])] + [(k, n) for n, k in others]
         self.id += 1
         self.state = "running"
         self.message = ""
         self.results = {}
         self.start_at = int(self.now_ms() + LEAD_MS)
-        threading.Thread(target=self._run, args=(self.id, list(self.devices)), daemon=True).start()
+        threading.Thread(target=self._run, args=(self.id, list(self.devices), self.start_at), daemon=True).start()
         return 200, self.session_json()
 
-    def _run(self, session_id, devices):
+    def _run(self, session_id, devices, start_at):
         n = len(devices)
         total_ms = (REPEATS + 1) * n * SLOT_MS
         try:
             lead = 1.0
-            wait = (self.start_at - lead * 1000 - self.now_ms()) / 1000.0
+            wait = (start_at - lead * 1000 - self.now_ms()) / 1000.0
             if wait > 0:
                 time.sleep(wait)
             duration = lead + total_ms / 1000.0 + 1.5
-            rec, sr, rec_start = self.recorder(self.interface_index, max(self.interface_channels, 1), duration, self.now_ms)
-            plan = {}
-            ids = [d for d, _ in devices]
-            for i, dev in enumerate(ids):
-                plan[self.channel_of[dev]] = [self.start_at + (r * n + i) * SLOT_MS for r in range(REPEATS + 1)]
-            raw = analyze(rec, sr, rec_start, plan)
-            ref_ch = self.channel_of[self.reference]
-            solved = solve(raw, ref_ch)
-            results = {}
-            problems = []
+            rec, sr, rec_start = self.recorder(self.interface_index, duration, self.now_ms)
+            mix = rec if rec.ndim == 1 else rec.sum(axis=1)   # a mesa pode entregar 2 canais: soma
+            plan = {dev: [start_at + (r * n + i) * SLOT_MS for r in range(REPEATS + 1)] for i, (dev, _) in enumerate(devices)}
+            raw = analyze(mix, sr, rec_start, plan)
+            if float(np.max(np.abs(mix))) < MIN_PEAK:
+                raise RuntimeError("Nenhum som chegou pela entrada de áudio do computador. Confira se a mesa está ligada "
+                                   "ao computador por USB e se, nas configurações de som, a ENTRADA é a da mesa.")
+            solved = solve(raw, devices[0][0])
+            results, problems = {}, []
             for dev, name in devices:
-                ch = self.channel_of[dev]
-                if ch in solved:
-                    s = solved[ch]
+                if dev in solved:
+                    s = solved[dev]
                     results[dev] = {"name": name, "offsetMs": s["offsetMs"], "spreadMs": s["spreadMs"],
                                     "quality": s["quality"], "count": s["count"]}
                 else:
-                    problems.append("%s (canal %d): %s" % (name, ch + 1, raw[ch]["error"] or "não detectado"))
+                    problems.append("%s: %s" % (name, raw[dev]["error"] or "não detectado"))
             with self.lock:
                 if self.id != session_id:
                     return
                 self.results = results
-                self.last_detail = raw
                 self.state = "done" if results else "failed"
-                self.message = "" if not problems else "Não medidos: " + "; ".join(problems)
-                if not results:
-                    self.message = self.message or "Nenhum aparelho foi medido."
-        except Exception as e:  # erro de gravação, referência ausente etc.
+                self.message = ("Não medidos: " + "; ".join(problems)) if problems else ""
+        except Exception as e:
             with self.lock:
                 if self.id == session_id:
                     self.state = "failed"

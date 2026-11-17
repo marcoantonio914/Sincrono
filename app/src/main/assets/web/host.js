@@ -4,7 +4,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const busy = new Set();            // controles sendo arrastados: não redesenhar
-  let caps = { upload: false, urls: [] };
+  let caps = { upload: false, urls: [], host: '', local: false, calibration: false };
   let groupsInfo = { groups: [], assign: {} };
   let mix = {};
   let devices = [];
@@ -48,7 +48,7 @@
   function hint(text) { const h = $('groups-hint'); if (h) h.textContent = text; }
 
   async function loadCaps() {
-    try { caps = Object.assign({ upload: false, urls: [] }, await api('/api/info', undefined, true)); } catch { /* servidor do celular: sem /api/info */ }
+    try { caps = Object.assign({ upload: false, urls: [], host: '', local: false, calibration: false }, await api('/api/info', undefined, true)); } catch { /* servidor do celular: sem /api/info */ }
   }
 
   function slider(key, value, onDone) {
@@ -191,9 +191,107 @@
     if (name) api('/api/groups', { op: 'add', name }).then(() => { $('new-group').value = ''; refresh(); });
   });
 
+
+  // ---------- tela inicial: ser anfitrião ou entrar (só no computador que roda o servidor) ----------
+  function getMode() { try { return sessionStorage.getItem('sincrono.mode'); } catch { return null; } }
+  function setMode(v) { try { if (v) sessionStorage.setItem('sincrono.mode', v); else sessionStorage.removeItem('sincrono.mode'); } catch { /* sem armazenamento */ } }
+  function joinAt(url) {
+    setMode(null); // ao voltar, pergunta de novo
+    location.href = url.replace(/\/+$/, '') + '/?voltar=' + encodeURIComponent(location.origin);
+  }
+  function setupStart() {
+    const screen = $('start-screen');
+    if (!screen) return;
+    if (!(caps.local && caps.host === 'pc') || getMode() === 'host') { screen.hidden = true; return; }
+    screen.hidden = false;
+    $('start-host').onclick = () => { setMode('host'); screen.hidden = true; };
+    $('start-join').onclick = async () => {
+      $('join-box').hidden = false;
+      $('join-found').textContent = 'Procurando sessões na rede…';
+      try {
+        const r = await api('/api/discover', undefined, true);
+        const list = $('join-list'); list.textContent = '';
+        for (const found of r.sessions) list.appendChild(button(found.name, () => joinAt(found.url), 'big'));
+        $('join-found').textContent = r.sessions.length ? 'Sessões encontradas:'
+          : (r.available ? 'Nenhuma sessão encontrada. Digite o endereço abaixo.' : 'Digite o endereço da sessão (ele aparece no app do anfitrião, na aba REDE).');
+      } catch { $('join-found').textContent = 'Digite o endereço da sessão.'; }
+    };
+    $('join-go').onclick = () => {
+      let a = $('join-addr').value.trim();
+      if (!a) { $('join-error').textContent = 'Digite o endereço.'; return; }
+      if (!/^https?:\/\//i.test(a)) a = 'http://' + a;
+      joinAt(a);
+    };
+  }
+  // Página aberta a partir de outro computador que escolheu "Entrar em uma sessão": botão para voltar.
+  try {
+    const back = new URLSearchParams(location.search).get('voltar');
+    if (back && /^https?:\/\//i.test(back)) sessionStorage.setItem('sincrono.voltar', back);
+  } catch { /* sem armazenamento */ }
+  function setupLeave() {
+    let back = null;
+    try { back = sessionStorage.getItem('sincrono.voltar'); } catch { /* sem armazenamento */ }
+    const b = $('leave-session');
+    if (b && back) { b.hidden = false; b.onclick = () => { try { sessionStorage.removeItem('sincrono.voltar'); } catch { /* */ } location.href = back; }; }
+  }
+
+  // ---------- calibrar todos (um botão) ----------
+  async function updateHostCalib() {
+    const panel = $('host-calib');
+    if (!panel) return;
+    const supported = typeof calibSupported !== 'undefined' && calibSupported;
+    panel.hidden = !supported;
+    if (!supported) return;
+    const pc = caps.host === 'pc';
+    $('host-calib-hint').textContent = pc
+      ? 'Ligue a saída de fone de cada aparelho (e a deste computador) à mesa de som, e a mesa ao computador por USB. Com o app aberto e o som ativo em todos, é só clicar.'
+      : 'Coloque os aparelhos perto uns dos outros, em silêncio e com volume médio. Os que têm microfone gravam os outros.';
+    const busy = (typeof calibTicker !== 'undefined' && calibTicker !== null) || (typeof state !== 'undefined' && state.playing);
+    const btn = $('calib-start');
+    btn.disabled = busy;
+    btn.textContent = (typeof state !== 'undefined' && state.playing) ? 'Pause o metrônomo para calibrar' : 'Calibrar todos os aparelhos';
+  }
+  $('calib-start').addEventListener('click', async () => {
+    const msg = $('calib-start-msg');
+    msg.textContent = '';
+    try {
+      const r = await fetch('/api/calib/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initiator: deviceId }) });
+      const d = await r.json().catch(() => ({}));
+      msg.textContent = r.ok ? 'Calibrando… não mexa nos cabos nem no volume.' : '⚠ ' + (d.error || 'Não foi possível iniciar a calibração.');
+    } catch { msg.textContent = '⚠ Sem conexão com o anfitrião.'; }
+  });
+  async function setupCalibAdvanced() {
+    if (caps.host !== 'pc' || !caps.local || !caps.calibration) return;
+    try {
+      const r = await api('/api/calib/interfaces', undefined, true);
+      const sel = $('calib-iface');
+      for (const i of r.interfaces) sel.add(new Option(`${i.name} (${i.channels} canais)`, i.index, false, i.index === r.selected));
+      sel.onchange = () => api('/api/calib/interface', { index: sel.value === '' ? null : Number(sel.value) }, true).catch(() => {});
+      $('calib-advanced').hidden = r.interfaces.length === 0;
+    } catch { /* sem interface listada */ }
+  }
+  // Textos da seção de resultado conforme quem anfitria.
+  function setupCalibTexts() {
+    const hint = $('calib-hint');
+    if (!hint) return;
+    if (caps.host === 'pc') {
+      hint.textContent = 'A calibração é feita pelo computador anfitrião, por cabo. Deixe esta página aberta e com o som ativo.';
+    }
+    if (caps.local) {
+      const c = $('calib-clear'); if (c) c.hidden = true;
+      const own = $('calib-auto'); if (own && own.parentElement) own.parentElement.hidden = true; // o anfitrião é a referência
+    }
+    const a = $('calib-audio');
+    if (a) setInterval(() => { a.hidden = soundRunning(); }, 500); // o som libera sozinho no Chrome/Edge do servidor
+  }
+
   let start = 'sync';
   try { start = localStorage.getItem('sincrono.tab') || 'sync'; } catch { /* sem armazenamento */ }
-  loadCaps().then(() => { showTab(start); setInterval(refresh, 1500); });
+  loadCaps().then(() => {
+    setupStart(); setupLeave(); setupCalibTexts(); setupCalibAdvanced();
+    showTab(start); setInterval(refresh, 1500);
+    updateHostCalib(); setInterval(updateHostCalib, 1000);
+  });
 })();
 
 // Tenta liberar o som já ao abrir a página. Em Chrome/Edge abertos pelo servidor do Sincrono

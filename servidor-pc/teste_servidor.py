@@ -86,6 +86,12 @@ try:
     s, g = call("POST", "/api/groups", {"op": "remove", "id": gv}); check(s == 200 and "devA" not in g["assign"], "remover grupo devolve aparelhos ao padrão")
     s, _ = call("GET", f"/api/audio?device=a&group={gv}"); check(s == 404, "grupo removido some")
     s, page = call("GET", "/"); check(s == 200 and b"Sincrono" in (page if isinstance(page, bytes) else page.encode()), "página web servida")
+    s, info = call("GET", "/api/info")
+    check(s == 200 and info.get("host") == "pc" and info.get("local") is True, "info: anfitrião pc, pedido local reconhecido")
+    s, d = call("GET", "/api/discover"); check(s == 200 and "sessions" in d and "available" in d, "descoberta de sessões responde (mesmo sem zeroconf)")
+    import http.client
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=5); c.request("GET", "/admin"); r = c.getresponse()
+    check(r.status == 302 and r.getheader("Location") == "/", "/admin leva à página única")
 finally:
     proc.terminate()
 print("tudo certo" if fails == 0 else f"{fails} falha(s)")
