@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sincrono — painel do anfitrião</title>
+<style>
+:root { --canvas:#f8f9fa; --surface:#fff; --recessed:#e9ecef; --ink:#111827; --graphite:#4b5563; --ok:#059669; --bad:#dc2626; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.45 Inter, system-ui, sans-serif; font-feature-settings:'tnum' on; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; display:grid; gap:16px; }
+h1 { margin:0; font-size:1.6rem; font-weight:500; letter-spacing:-.02em; }
+section { background:var(--surface); border:1px solid var(--recessed); border-radius:8px; padding:16px; display:grid; gap:12px; }
+h2 { margin:0; font-size:.72rem; font-weight:500; letter-spacing:.06em; text-transform:uppercase; color:var(--graphite); }
+button, input, select { min-height:40px; border:1px solid var(--recessed); border-radius:4px; background:var(--surface); color:var(--ink); font:inherit; padding:6px 12px; }
+button { background:var(--recessed); cursor:pointer; }
+button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
+button.danger { color:var(--bad); background:var(--surface); }
+button:disabled { opacity:.45; cursor:default; }
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.grow { flex:1; min-width:140px; }
+.muted { color:var(--graphite); font-size:.85rem; }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--recessed); display:inline-block; }
+.dot.on { background:var(--ok); }
+.group { border-top:1px solid var(--recessed); padding-top:12px; display:grid; gap:8px; }
+input[type=range] { padding:0; border:0; min-height:28px; accent-color:var(--ink); }
+table { width:100%; border-collapse:collapse; }
+td, th { text-align:left; padding:6px 4px; border-top:1px solid var(--recessed); font-size:.9rem; }
+th { font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--graphite); font-weight:500; border-top:0; }
+#msg { color:var(--bad); min-height:1.2em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sincrono — painel do anfitrião</h1>
+  <p id="msg" aria-live="polite"></p>
+
+  <section>
+    <h2>Metrônomo</h2>
+    <div class="row">
+      <label>BPM <input id="bpm" type="number" min="30" max="300" value="120" style="width:90px"></label>
+      <label>Tempos <input id="beats" type="number" min="1" max="12" value="4" style="width:70px"></label>
+      <button class="primary" id="play">Iniciar</button>
+      <button id="pause">Pausar</button>
+      <button id="restart">Reiniciar</button>
+      <span class="muted" id="mstate"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Grupos e áudio</h2>
+    <div class="row">
+      <button class="primary" id="playAll">Tocar todos</button>
+      <button id="pauseAll">Pausar todos</button>
+      <span class="muted">Cada grupo toca o seu arquivo; todos começam e param no mesmo instante.</span>
+    </div>
+    <div id="groups"></div>
+    <div class="row">
+      <input id="newGroup" class="grow" placeholder="Novo grupo (ex.: Violinos)" maxlength="40">
+      <button id="addGroup">Criar grupo</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Aparelhos</h2>
+    <table><thead><tr><th>Aparelho</th><th>Visto há</th><th>Grupo</th><th>Volume</th></tr></thead><tbody id="devices"></tbody></table>
+    <p class="muted" id="nodev">Nenhum aparelho conectado ainda.</p>
+  </section>
+  <section id="cableSec" hidden>
+    <h2>Calibração por cabo (interface de áudio)</h2>
+    <p class="muted">Ligue a saída de fone/áudio de cada aparelho a uma entrada da interface (o computador também, como referência). Escolha a interface, diga qual aparelho está em cada canal e marque a referência. Todos os aparelhos precisam estar com a página/app aberto e o som ativo.</p>
+    <div class="row"><label>Interface <select id="iface"></select></label><span class="muted" id="ifaceInfo"></span></div>
+    <table><thead><tr><th>Aparelho</th><th>Canal</th><th>Referência</th></tr></thead><tbody id="cableDevs"></tbody></table>
+    <div class="row"><button class="primary" id="cableStart">Calibrar por cabo</button><span id="cableState" class="muted"></span></div>
+    <div id="cableResults"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const msg = (t) => { $('msg').textContent = t || ''; };
+let groupsInfo = { groups: [], assign: {} };
+let mix = {};
+const busy = new Set(); // sliders sendo arrastados (não sobrescrever)
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { msg(data.error || 'Erro ' + r.status); throw new Error(data.error || r.status); }
+  msg('');
+  return data;
+}
+function metro(type) {
+  const bpm = Number($('bpm').value) || 120, beatsPerBar = Number($('beats').value) || 4;
+  return api('/api/command', { type, bpm, beatsPerBar }).then(refresh);
+}
+$('play').onclick = () => metro('play');
+$('pause').onclick = () => metro('pause');
+$('restart').onclick = () => metro('restart');
+$('playAll').onclick = () => api('/api/audio/cmd?group=all', { type: 'play' }).then(refresh);
+$('pauseAll').onclick = () => api('/api/audio/cmd?group=all', { type: 'pause' }).then(refresh);
+$('addGroup').onclick = () => { const name = $('newGroup').value.trim(); if (name) api('/api/groups', { op: 'add', name }).then(() => { $('newGroup').value = ''; refresh(); }); };
+
+function slider(key, value, onDone) {
+  const el = document.createElement('input');
+  el.type = 'range'; el.min = 0; el.max = 100; el.value = Math.round(value * 100);
+  el.oninput = () => busy.add(key);
+  el.onchange = () => { onDone(el.value / 100); busy.delete(key); };
+  return el;
+}
+function renderGroups() {
+  const box = $('groups');
+  if (busy.size) return; // não redesenha no meio de um arraste
+  box.textContent = '';
+  for (const g of groupsInfo.groups) {
+    const d = document.createElement('div'); d.className = 'group';
+    const head = document.createElement('div'); head.className = 'row';
+    head.innerHTML = `<span class="dot ${g.playing ? 'on' : ''}"></span><strong class="grow"></strong><span class="muted"></span>`;
+    head.querySelector('strong').textContent = g.name;
+    head.querySelector('.muted').textContent = g.file || 'sem arquivo';
+    d.appendChild(head);
+    const row = document.createElement('div'); row.className = 'row';
+    const up = document.createElement('input'); up.type = 'file'; up.accept = 'audio/*'; up.className = 'grow';
+    up.onchange = async () => {
+      const f = up.files[0]; if (!f) return;
+      msg('Enviando ' + f.name + '…');
+      const r = await fetch(`/api/audio/upload?group=${g.id}&name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'X-File-Type': f.type || 'application/octet-stream' }, body: f });
+      msg(r.ok ? '' : ((await r.json().catch(() => ({}))).error || 'Falha no envio.')); refresh();
+    };
+    const play = Object.assign(document.createElement('button'), { textContent: 'Tocar', disabled: !g.file || g.playing });
+    play.onclick = () => api(`/api/audio/cmd?group=${g.id}`, { type: 'play' }).then(refresh);
+    const pause = Object.assign(document.createElement('button'), { textContent: 'Pausar', disabled: !g.playing });
+    pause.onclick = () => api(`/api/audio/cmd?group=${g.id}`, { type: 'pause' }).then(refresh);
+    row.append(up, play, pause);
+    d.appendChild(row);
+    const vol = document.createElement('div'); vol.className = 'row';
+    const lab = Object.assign(document.createElement('span'), { textContent: 'Volume do grupo', className: 'muted' });
+    vol.append(lab, Object.assign(slider('g:' + g.id, mix['g:' + g.id] ?? 1, (v) => api('/api/mix', { device: 'g:' + g.id, level: v })), { className: 'grow' }));
+    d.appendChild(vol);
+    if (g.id !== 'g1') {
+      const r2 = document.createElement('div'); r2.className = 'row';
+      const ren = Object.assign(document.createElement('button'), { textContent: 'Renomear' });
+      ren.onclick = () => { const n = prompt('Novo nome do grupo', g.name); if (n) api('/api/groups', { op: 'rename', id: g.id, name: n }).then(refresh); };
+      const del = Object.assign(document.createElement('button'), { textContent: 'Remover grupo', className: 'danger' });
+      del.onclick = () => { if (confirm('Remover o grupo "' + g.name + '"? Os aparelhos voltam ao grupo Geral.')) api('/api/groups', { op: 'remove', id: g.id }).then(refresh); };
+      r2.append(ren, del); d.appendChild(r2);
+    }
+    box.appendChild(d);
+  }
+}
+function renderDevices(list) {
+  if (busy.size) return;
+  const body = $('devices'); body.textContent = '';
+  $('nodev').hidden = list.length > 0;
+  for (const dev of list) {
+    const tr = document.createElement('tr');
+    const name = document.createElement('td'); name.textContent = dev.name;
+    const age = document.createElement('td'); age.textContent = dev.ageMs < 10000 ? 'agora' : Math.round(dev.ageMs / 1000) + ' s';
+    const gTd = document.createElement('td'); const sel = document.createElement('select');
+    for (const g of groupsInfo.groups) sel.add(new Option(g.name, g.id, false, g.id === dev.group));
+    sel.onchange = () => api('/api/groups', { op: 'assign', device: dev.id, group: sel.value }).then(refresh);
+    gTd.appendChild(sel);
+    const vTd = document.createElement('td');
+    vTd.appendChild(slider('d:' + dev.id, dev.level, (v) => api('/api/mix', { device: dev.id, level: v })));
+    tr.append(name, age, gTd, vTd); body.appendChild(tr);
+  }
+}
+async function refresh() {
+  try {
+    const [st, g, m, dv] = await Promise.all([api('/api/state'), api('/api/groups'), api('/api/mix'), api('/api/devices')]);
+    mix = m.levels || {}; groupsInfo = g;
+    $('mstate').textContent = st.playing ? `tocando ${st.bpm} BPM` : 'parado';
+    renderGroups(); renderDevices(dv);
+  } catch { /* mostra a mensagem de api() */ }
+}
+refresh(); setInterval(refresh, 1500);
+
+// ---- calibração por cabo
+let cable = { ifaces: [], map: {}, reference: '', iface: null, loaded: false, off: false };
+async function cableInit() {
+  try {
+    const r = await fetch('/api/calib?device=admin-panel');
+    if (!r.ok) { cable.off = true; return; }
+    const j = await (await fetch('/api/calib/interfaces')).json();
+    cable.ifaces = j.interfaces || [];
+    $('cableSec').hidden = false;
+    const sel = $('iface'); sel.textContent = '';
+    if (!cable.ifaces.length) { sel.add(new Option('nenhuma interface encontrada', '')); $('ifaceInfo').textContent = j.error || ''; }
+    for (const i of cable.ifaces) sel.add(new Option(`${i.name} (${i.channels} canais)`, i.index));
+    sel.onchange = cableSave;
+    cable.loaded = true;
+  } catch { cable.off = true; }
+}
+function cableSave() {
+  const sel = $('iface'); const info = cable.ifaces.find((i) => String(i.index) === sel.value);
+  const channels = {};
+  for (const el of document.querySelectorAll('[data-chan]')) if (el.value !== '') channels[el.dataset.chan] = Number(el.value);
+  const ref = (document.querySelector('input[name=cref]:checked') || {}).value || '';
+  return api('/api/calib/map', { channels, reference: ref, interface: info ? info.index : null, interfaceChannels: info ? info.channels : 0 });
+}
+function cableRender(session) {
+  const body = $('cableDevs');
+  if (body.contains(document.activeElement)) return;
+  const chans = (cable.ifaces.find((i) => String(i.index) === $('iface').value) || { channels: 0 }).channels;
+  body.textContent = '';
+  for (const p of (session.peers || [])) {
+    if (p.id === 'admin-panel') continue;
+    const tr = document.createElement('tr');
+    const n = document.createElement('td'); n.textContent = p.name;
+    const c = document.createElement('td'); const sel = document.createElement('select'); sel.dataset.chan = p.id;
+    sel.add(new Option('—', ''));
+    for (let k = 0; k < chans; k++) sel.add(new Option('Canal ' + (k + 1), k, false, p.channel === k));
+    sel.onchange = () => cableSave().then(refresh).catch(() => {});
+    c.appendChild(sel);
+    const r = document.createElement('td'); const rd = document.createElement('input');
+    rd.type = 'radio'; rd.name = 'cref'; rd.value = p.id; rd.checked = !!p.reference;
+    rd.onchange = () => cableSave().catch(() => {});
+    r.appendChild(rd); tr.append(n, c, r); body.appendChild(tr);
+  }
+  const st = { idle: '', running: 'calibrando… (uns 15 s)', done: 'concluída', failed: 'falhou' }[session.state] || '';
+  if (!(cable.holdMsg && Date.now() < cable.holdMsg)) $('cableState').textContent = st + (session.message ? ' — ' + session.message : '');
+  $('cableStart').disabled = session.state === 'running';
+  const box = $('cableResults'); box.textContent = '';
+  if (session.state === 'done' || session.state === 'failed') {
+    for (const [id, r] of Object.entries(session.results || {})) {
+      const d = document.createElement('div');
+      d.textContent = `${r.name}: ${r.offsetMs > 0 ? '+' : ''}${r.offsetMs.toFixed(2)} ms (variação ${r.spreadMs.toFixed(2)} ms, confiança ${{ high: 'alta', medium: 'média', low: 'baixa' }[r.quality]})`;
+      box.appendChild(d);
+    }
+  }
+}
+$('cableStart').onclick = async () => {
+  try {
+    await cableSave();
+    await api('/api/calib/start', {});
+    $('cableState').textContent = 'calibrando… (uns 15 s)';
+  } catch (e) {
+    $('cableState').textContent = '⚠ ' + (e.message || 'não foi possível iniciar'); // erro bem ao lado do botão
+    cable.holdMsg = Date.now() + 8000;
+  }
+};
+async function cableRefresh() {
+  if (cable.off) return;
+  if (!cable.loaded) await cableInit();
+  if (!cable.loaded) return;
+  try { cableRender(await (await fetch('/api/calib?device=admin-panel&name=Painel')).json()); } catch {}
+}
+setInterval(cableRefresh, 2000); cableRefresh();
+</script>
+</body>
+</html>

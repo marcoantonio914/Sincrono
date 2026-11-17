@@ -1,0 +1,8 @@
+{
+  "name": "Metrônomo sincronizado",
+  "short_name": "Metrônomo",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}

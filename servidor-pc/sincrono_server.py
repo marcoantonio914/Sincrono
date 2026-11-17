@@ -1,0 +1,771 @@
+#!/usr/bin/env python3
+"""
+Servidor do Sincrono para rodar no COMPUTADOR (o computador como anfitrião).
+
+    python3 sincrono_server.py            # porta 3000
+    python3 sincrono_server.py --port 3000 --web ../app/src/main/assets/web
+
+Fala o mesmo protocolo do anfitrião do app Android (estado/relógio/comandos, áudio por grupo,
+volumes), então os apps e a página web entram nele como em qualquer anfitrião. Só usa a
+biblioteca padrão do Python (3.8+). Se o pacote `zeroconf` estiver instalado
+(pip install zeroconf), o servidor também se anuncia na rede e aparece na lista "Sessões
+encontradas" do app.
+
+Painel do anfitrião (grupos, arquivos, volumes, metrônomo):  http://localhost:3000/admin
+
+Limitações desta versão (honestas):
+  * Calibração automática por cabo com interface de áudio multicanal (veja calibracao_cabo.py;
+    precisa de numpy e sounddevice). Sem elas, use o ajuste fino manual.
+  * O servidor em si não toca som. O computador toca pela PÁGINA aberta no navegador dele
+    (o servidor abre http://localhost:PORTA/ sozinho em Chrome/Edge com o som liberado; em outro navegador, clique uma vez em "Ativar som").
+"""
+
+import argparse
+import json
+import os
+import queue
+import re
+import socket
+import sys
+import threading
+import time
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+try:
+    import calibracao_cabo
+except Exception:  # sem o módulo ou sem numpy: o servidor funciona, só sem calibração por cabo
+    calibracao_cabo = None
+CABLE = None
+
+LEAD_MS = 3000          # antecedência do início do metrônomo
+AUDIO_LEAD_MS = 2500.0  # antecedência do início da música
+AUDIO_STOP_MS = 1200.0  # antecedência da parada agendada
+PEER_TTL_MS = 6000.0
+MAX_GROUPS = 16
+DEFAULT_GROUP = "g1"
+MAX_UPLOAD = 300_000_000
+
+_EPOCH_MS = time.time() * 1000.0
+_T0 = time.perf_counter()
+
+
+def now_ms():
+    """Relógio do servidor: base em ms 'de parede' + avanço monotônico com fração de ms."""
+    return _EPOCH_MS + (time.perf_counter() - _T0) * 1000.0
+
+
+def clamp(v, lo, hi):
+    return lo if v < lo else hi if v > hi else v
+
+
+class Hub:
+    """Estado do áudio de UM grupo: arquivo e função (play/pause/posição) do relógio do servidor."""
+
+    def __init__(self, on_change):
+        self.lock = threading.RLock()
+        self.on_change = on_change
+        self.file = None            # dict(id, name, path, size, mime)
+        self.next_file_id = 1
+        self.revision = 0
+        self.playing = False
+        self.start_at = 0.0
+        self.position_ms = 0.0
+        self.stop_at = None
+        self.peers = {}             # device -> (lastSeen, readyId)
+
+    def set_file(self, path, name, mime, size):
+        with self.lock:
+            old = self.file
+            self.file = dict(id=self.next_file_id, name=name, path=path, size=size, mime=mime)
+            self.next_file_id += 1
+            self.playing = False
+            self.position_ms = 0.0
+            self.stop_at = None
+            self.revision += 1
+            if old:
+                try:
+                    os.remove(old["path"])
+                except OSError:
+                    pass
+        self._notify()
+
+    def clear(self):
+        with self.lock:
+            if self.file:
+                try:
+                    os.remove(self.file["path"])
+                except OSError:
+                    pass
+            self.file = None
+            self.playing = False
+            self.position_ms = 0.0
+            self.stop_at = None
+            self.revision += 1
+        self._notify()
+
+    def _notify(self):
+        if self.on_change:
+            self.on_change(self.snapshot())
+
+    def _normalize(self):
+        if self.playing and self.stop_at is not None and now_ms() > self.stop_at + 300:
+            self.position_ms += max(0.0, self.stop_at - self.start_at)
+            self.playing = False
+            self.stop_at = None
+            self.revision += 1
+
+    def _position_at(self, t):
+        if not self.playing or t <= self.start_at:
+            return self.position_ms
+        if self.stop_at is not None and t >= self.stop_at:
+            return self.position_ms + max(0.0, self.stop_at - self.start_at)
+        return self.position_ms + (t - self.start_at)
+
+    def has_file(self):
+        with self.lock:
+            return self.file is not None
+
+    def is_playing(self):
+        with self.lock:
+            self._normalize()
+            return self.playing and self.stop_at is None
+
+    def file_name(self):
+        with self.lock:
+            return self.file["name"] if self.file else None
+
+    def current_file(self, fid):
+        with self.lock:
+            return self.file if self.file and self.file["id"] == fid else None
+
+    def register(self, device, ready):
+        if device:
+            with self.lock:
+                self.peers[device] = (now_ms(), ready)
+
+    def snapshot(self):
+        with self.lock:
+            self._normalize()
+            now = now_ms()
+            live = [p for p in self.peers.values() if now - p[0] < PEER_TTL_MS]
+            f = self.file
+            ready = 0 if f is None else sum(1 for p in live if p[1] == f["id"])
+            return json.dumps({
+                "revision": self.revision,
+                "serverNow": int(now),
+                "file": None if f is None else {"id": f["id"], "name": f["name"], "size": f["size"], "mime": f["mime"]},
+                "playing": self.playing,
+                "startAt": int(self.start_at),
+                "positionMs": self.position_ms,
+                "stopAt": None if self.stop_at is None else int(self.stop_at),
+                "ready": ready,
+                "devices": len(live),
+            })
+
+    def command(self, body, at=None):
+        """Devolve (status, json). [at]: 'agora' fixo, para vários grupos começarem no MESMO instante."""
+        with self.lock:
+            self._normalize()
+            if self.file is None:
+                return 400, {"error": "Nenhum arquivo de áudio foi escolhido."}
+            now = now_ms() if at is None else at
+            requested = body.get("positionMs")
+            kind = body.get("type")
+            if kind == "play":
+                if not (self.playing and self.stop_at is None):
+                    start_from = self._position_at(now) if requested is None else requested
+                    self.start_at = now + AUDIO_LEAD_MS
+                    self.position_ms = max(0.0, float(start_from))
+                    self.stop_at = None
+                    self.playing = True
+                    self.revision += 1
+            elif kind == "pause":
+                if self.playing and self.stop_at is None:
+                    if now < self.start_at:
+                        self.playing = False
+                    else:
+                        self.stop_at = now + AUDIO_STOP_MS
+                    self.revision += 1
+            elif kind == "seek":
+                target = max(0.0, float(requested or 0.0))
+                if self.playing:
+                    self.start_at = now + AUDIO_LEAD_MS
+                    self.position_ms = target
+                    self.stop_at = None
+                else:
+                    self.position_ms = target
+                self.revision += 1
+            elif kind == "stop":
+                self.playing = False
+                self.position_ms = 0.0
+                self.stop_at = None
+                self.revision += 1
+            else:
+                return 400, {"error": "Comando inválido."}
+        self._notify()
+        return 200, json.loads(self.snapshot())
+
+
+class Session:
+    """Tudo o que o servidor guarda: metrônomo, grupos, áudio por grupo, volumes e aparelhos vistos."""
+
+    def __init__(self, cache_dir):
+        self.lock = threading.RLock()
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.state = {"bpm": 120.0, "beatsPerBar": 4, "playing": False, "startAt": None, "revision": -1}
+        self.state_clients = []          # filas de eventos do metrônomo
+        self.audio_clients = []          # (grupo, fila)
+        self.group_names = {DEFAULT_GROUP: "Geral"}
+        self.group_next = 2
+        self.assign = {}
+        self.group_rev = 1
+        self.hubs = {}
+        self.mix = {}
+        self.mix_rev = 1
+        self.devices = {}                # id -> dict(name, seen)
+
+    # ---- metrônomo
+    def command(self, body):
+        kind = body.get("type")
+        if kind not in ("play", "pause", "restart", "settings"):
+            return 400, {"error": "Comando inválido."}
+        bpm = body.get("bpm")
+        beats = body.get("beatsPerBar")
+        if kind != "pause":
+            try:
+                ok = 30 <= float(bpm) <= 300 and 1 <= int(beats) <= 12
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                return 400, {"error": "BPM ou compasso inválido."}
+        with self.lock:
+            cur = self.state
+            start_at = int(now_ms() + LEAD_MS)
+            nxt = dict(cur)
+            if kind == "pause":
+                nxt.update(playing=False, startAt=start_at)
+            elif kind == "settings":
+                nxt.update(bpm=float(bpm), beatsPerBar=int(beats), startAt=start_at if cur["playing"] else cur["startAt"])
+            else:
+                nxt.update(bpm=float(bpm), beatsPerBar=int(beats), playing=True, startAt=start_at)
+            nxt["revision"] = cur["revision"] + 1
+            self.state = nxt
+            clients = list(self.state_clients)
+        text = json.dumps(nxt)
+        for q in clients:
+            q.put(f"event: state\ndata: {text}\n\n")
+        return 200, nxt
+
+    # ---- grupos
+    def hub(self, gid):
+        with self.lock:
+            if gid not in self.group_names:
+                return None
+            h = self.hubs.get(gid)
+            if h is None:
+                h = Hub(lambda snap, gid=gid: self._broadcast_audio(gid, snap))
+                self.hubs[gid] = h
+            return h
+
+    def _broadcast_audio(self, gid, snap):
+        with self.lock:
+            clients = [q for g, q in self.audio_clients if g == gid]
+        for q in clients:
+            q.put(f"event: audio\ndata: {snap}\n\n")
+
+    def groups_json(self):
+        with self.lock:
+            groups = []
+            for gid, name in self.group_names.items():
+                h = self.hubs.get(gid)
+                groups.append({"id": gid, "name": name, "file": h.file_name() if h else None,
+                               "playing": h.is_playing() if h else False})
+            return {"rev": self.group_rev, "groups": groups, "assign": dict(self.assign)}
+
+    def group_op(self, body):
+        op = body.get("op")
+        with self.lock:
+            if op == "add":
+                name = re.sub(r"[\x00-\x1f]", "", str(body.get("name", ""))).strip()[:40]
+                if not name or len(self.group_names) >= MAX_GROUPS:
+                    return False
+                self.group_names["g%d" % self.group_next] = name
+                self.group_next += 1
+            elif op == "rename":
+                name = re.sub(r"[\x00-\x1f]", "", str(body.get("name", ""))).strip()[:40]
+                gid = body.get("id")
+                if not name or gid not in self.group_names:
+                    return False
+                self.group_names[gid] = name
+            elif op == "remove":
+                gid = body.get("id")
+                if gid == DEFAULT_GROUP or gid not in self.group_names:
+                    return False
+                del self.group_names[gid]
+                self.assign = {d: g for d, g in self.assign.items() if g != gid}
+                h = self.hubs.pop(gid, None)
+                if h:
+                    h.on_change = None
+                    h.clear()
+                self.audio_clients = [(g, q) for g, q in self.audio_clients if g != gid or q.put(None)]
+            elif op == "assign":
+                dev, gid = body.get("device"), body.get("group")
+                if not dev or len(dev) > 80 or gid not in self.group_names:
+                    return False
+                if gid == DEFAULT_GROUP:
+                    self.assign.pop(dev, None)
+                else:
+                    self.assign[dev] = gid
+            else:
+                return False
+            self.group_rev += 1
+        return True
+
+    def group_of(self, device):
+        with self.lock:
+            return self.assign.get(device, DEFAULT_GROUP)
+
+    def audio_all(self, body):
+        at = now_ms()
+        ok = 0
+        last = None
+        for gid in list(self.group_names):
+            h = self.hub(gid)
+            if h and h.has_file():
+                status, reply = h.command(body, at)
+                if status == 200:
+                    ok += 1
+                else:
+                    last = (status, reply)
+        if ok == 0:
+            return last or (400, {"error": "Nenhum grupo tem arquivo de áudio."})
+        return 200, self.groups_json()
+
+    # ---- volumes
+    def mix_json(self):
+        with self.lock:
+            return {"rev": self.mix_rev, "levels": dict(self.mix)}
+
+    def mix_set(self, dev, level):
+        if not dev or len(dev) > 80:
+            return False
+        try:
+            v = clamp(float(level), 0.0, 1.0)
+        except (TypeError, ValueError):
+            return False
+        with self.lock:
+            if self.mix.get(dev) != v:
+                self.mix[dev] = v
+                self.mix_rev += 1
+        return True
+
+    # ---- aparelhos vistos
+    def seen(self, device, name=None):
+        if not device:
+            return
+        with self.lock:
+            d = self.devices.setdefault(device, {"name": ""})
+            d["seen"] = now_ms()
+            if name:
+                d["name"] = name
+
+    def devices_json(self):
+        now = now_ms()
+        with self.lock:
+            out = []
+            for dev, d in self.devices.items():
+                out.append({"id": dev, "name": d.get("name") or dev[:8], "group": self.assign.get(dev, DEFAULT_GROUP),
+                            "ageMs": int(now - d.get("seen", 0)), "level": self.mix.get(dev, 1.0)})
+            return sorted(out, key=lambda x: x["name"])
+
+
+SESSION = None
+WEB_DIR = None
+ADMIN_HTML = Path(__file__).with_name("admin.html")
+
+
+def query_of(path):
+    return {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(path).query).items()}
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    server_version = "Sincrono"
+
+    def log_message(self, fmt, *args):  # silencioso: o servidor atende muitas requisições por segundo
+        pass
+
+    def parse_request(self):
+        self._t_recv = now_ms()  # logo depois de ler a linha da requisição (melhor ponto de carimbo)
+        return super().parse_request()
+
+    # ---- utilidades
+    def _json(self, status, obj):
+        data = (obj if isinstance(obj, str) else json.dumps(obj)).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        if n < 0 or n > 65536:
+            raise ValueError("corpo grande demais")
+        return self.rfile.read(n) if n else b""
+
+    def _body_json(self):
+        try:
+            return json.loads(self._body().decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            return None
+
+    def _sse(self, q, first):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache, no-transform")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        try:
+            self.wfile.write(first.encode("utf-8"))
+            self.wfile.flush()
+            while True:
+                try:
+                    item = q.get(timeout=10)
+                except queue.Empty:
+                    item = ": ping\n\n"
+                if item is None:
+                    break
+                self.wfile.write(item.encode("utf-8"))
+                self.wfile.flush()
+        except (OSError, ValueError):
+            pass
+
+    # ---- rotas
+    def do_GET(self):
+        s = SESSION
+        path = urllib.parse.urlparse(self.path).path
+        q = query_of(self.path)
+        if path == "/api/state":
+            return self._json(200, s.state)
+        if path == "/events":
+            fila = queue.Queue()
+            with s.lock:
+                s.state_clients.append(fila)
+                first = "event: state\ndata: %s\n\n" % json.dumps(s.state)
+            try:
+                return self._sse(fila, first)
+            finally:
+                with s.lock:
+                    if fila in s.state_clients:
+                        s.state_clients.remove(fila)
+        if path == "/events/audio":
+            gid = q.get("group", DEFAULT_GROUP)
+            h = s.hub(gid)
+            if h is None:
+                return self._json(404, {"error": "Grupo não encontrado."})
+            fila = queue.Queue()
+            entry = (gid, fila)
+            with s.lock:
+                s.audio_clients.append(entry)
+            try:
+                return self._sse(fila, "event: audio\ndata: %s\n\n" % h.snapshot())
+            finally:
+                with s.lock:
+                    if entry in s.audio_clients:
+                        s.audio_clients.remove(entry)
+        if path == "/api/audio":
+            h = s.hub(q.get("group", DEFAULT_GROUP))
+            if h is None:
+                return self._json(404, {"error": "Grupo não encontrado."})
+            dev = q.get("device", "")
+            s.seen(dev)
+            try:
+                ready = int(q.get("ready", "0"))
+            except ValueError:
+                ready = 0
+            h.register(dev, ready)
+            return self._json(200, h.snapshot())
+        if path == "/api/audio/file":
+            h = s.hub(q.get("group", DEFAULT_GROUP))
+            try:
+                fid = int(q.get("id", ""))
+            except ValueError:
+                fid = -1
+            info = h.current_file(fid) if h else None
+            if not info or not os.path.isfile(info["path"]):
+                return self._json(404, {"error": "Não encontrado."})
+            size = os.path.getsize(info["path"])
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(size))
+            self.end_headers()
+            with open(info["path"], "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            return
+        if path == "/api/mix":
+            return self._json(200, s.mix_json())
+        if path == "/api/groups":
+            return self._json(200, s.groups_json())
+        if path == "/api/info":
+            port = self.server.server_address[1]
+            urls = ["http://%s:%d" % (ip, port) for ip in lan_addresses()] or ["http://127.0.0.1:%d" % port]
+            return self._json(200, {"host": "pc", "upload": True, "urls": urls})
+        if path == "/api/devices":
+            return self._json(200, s.devices_json())
+        if path.startswith("/api/calib"):
+            if q.get("device") != "admin-panel":
+                s.seen(q.get("device"), q.get("name"))
+            if CABLE is None:
+                return self._json(404, {"error": "Este servidor não oferece calibração automática (falta numpy)."})
+            status, reply = CABLE.handle("GET", path, q, None)
+            return self._json(status, reply)
+        if path == "/admin":
+            return self._file(ADMIN_HTML, "text/html; charset=utf-8")
+        if path.startswith("/api/"):
+            return self._json(404, {"error": "Não encontrado."})
+        return self._asset(path)
+
+    def do_POST(self):
+        s = SESSION
+        path = urllib.parse.urlparse(self.path).path
+        q = query_of(self.path)
+        if path == "/api/sync":
+            t_recv = getattr(self, "_t_recv", now_ms())
+            body = self._body_json() or {}
+            sent = now_ms()
+            client_sent = int(body.get("clientSentAt", 0) or 0) if isinstance(body, dict) else 0
+            return self._json(200, '{"clientSentAt":%d,"serverReceivedAt":%.3f,"serverSentAt":%.3f}' % (client_sent, t_recv, sent))
+        if path == "/api/audio/upload":
+            return self._upload(q)
+        body = self._body_json()
+        if body is None or not isinstance(body, dict):
+            return self._json(400, {"error": "JSON inválido."})
+        if path.startswith("/api/calib"):
+            if CABLE is None:
+                return self._json(404, {"error": "Este servidor não oferece calibração automática (falta numpy)."})
+            status, reply = CABLE.handle("POST", path, q, body)
+            return self._json(status, reply)
+        if path == "/api/command":
+            status, reply = s.command(body)
+            return self._json(status, reply)
+        if path == "/api/audio/cmd":
+            gid = q.get("group", DEFAULT_GROUP)
+            if gid == "all":
+                status, reply = s.audio_all(body)
+                return self._json(status, reply)
+            h = s.hub(gid)
+            if h is None:
+                return self._json(404, {"error": "Grupo não encontrado."})
+            status, reply = h.command(body)
+            return self._json(status, reply)
+        if path == "/api/mix":
+            if not body.get("device") or "level" not in body or not s.mix_set(body["device"], body["level"]):
+                return self._json(400, {"error": "Pedido inválido."})
+            return self._json(200, s.mix_json())
+        if path == "/api/groups":
+            if not s.group_op(body):
+                return self._json(400, {"error": "Operação de grupo inválida."})
+            return self._json(200, s.groups_json())
+        return self._json(404, {"error": "Não encontrado."})
+
+    def _upload(self, q):
+        s = SESSION
+        h = s.hub(q.get("group", DEFAULT_GROUP))
+        name = re.sub(r"[\x00-\x1f/\\]", "", q.get("name", "audio")).strip()[:120] or "audio"
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if h is None:
+            return self._json(404, {"error": "Grupo não encontrado."})
+        if n <= 0 or n > MAX_UPLOAD:
+            return self._json(400, {"error": "Arquivo vazio ou grande demais (máximo %d MB)." % (MAX_UPLOAD // 1_000_000)})
+        target = s.cache_dir / ("up-%d.bin" % int(time.time() * 1000))
+        left = n
+        with open(target, "wb") as f:
+            while left > 0:
+                chunk = self.rfile.read(min(65536, left))
+                if not chunk:
+                    break
+                f.write(chunk)
+                left -= len(chunk)
+        if left > 0:
+            os.remove(target)
+            return self._json(400, {"error": "Envio interrompido."})
+        h.set_file(str(target), name, self.headers.get("X-File-Type", "application/octet-stream"), n)
+        return self._json(200, s.groups_json())
+
+    def _file(self, path, ctype):
+        try:
+            data = Path(path).read_bytes()
+        except OSError:
+            return self._json(404, {"error": "Não encontrado."})
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _asset(self, path):
+        if WEB_DIR is None:
+            return self._json(404, {"error": "Pasta da página web não encontrada (use --web)."})
+        rel = "index.html" if path == "/" else path.lstrip("/")
+        target = (WEB_DIR / rel).resolve()
+        if WEB_DIR.resolve() not in target.parents and target != WEB_DIR.resolve():
+            return self._json(404, {"error": "Não encontrado."})
+        types = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                 ".css": "text/css; charset=utf-8", ".webmanifest": "application/manifest+json; charset=utf-8",
+                 ".json": "application/json; charset=utf-8"}
+        return self._file(target, types.get(target.suffix, "application/octet-stream"))
+
+
+def lan_addresses():
+    found = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127.") and ip not in found:
+                found.append(ip)
+    except OSError:
+        pass
+    try:  # o endereço usado para sair da rede costuma ser o certo
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        if ip not in found and not ip.startswith("127."):
+            found.insert(0, ip)
+    except OSError:
+        pass
+    return found
+
+
+def announce(port):
+    try:
+        from zeroconf import ServiceInfo, Zeroconf
+    except ImportError:
+        print("  (para aparecer na lista 'Sessões encontradas' dos apps: pip install zeroconf)")
+        return None
+    ips = [socket.inet_aton(ip) for ip in lan_addresses()]
+    if not ips:
+        return None
+    name = "Metronomo Computador (%s)" % socket.gethostname()[:20]
+    info = ServiceInfo("_metronomo._tcp.local.", name + "._metronomo._tcp.local.", addresses=ips, port=port, properties={})
+    zc = Zeroconf()
+    zc.register_service(info)
+    print("  anunciado na rede como '%s'" % name)
+    return zc
+
+
+def find_web_dir(explicit):
+    candidates = [Path(explicit)] if explicit else [
+        Path(__file__).parent / "web",
+        Path(__file__).resolve().parent.parent / "app" / "src" / "main" / "assets" / "web",
+    ]
+    for c in candidates:
+        if (c / "index.html").is_file():
+            return c
+    return None
+
+
+def find_chromium():
+    """Procura Chrome, Edge ou Chromium (navegadores que aceitam liberar o autoplay por parâmetro)."""
+    import shutil, os, sys
+    names = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "msedge", "chrome"]
+    for n in names:
+        w = shutil.which(n)
+        if w:
+            return w
+    fixed = []
+    if sys.platform.startswith("win"):
+        for base in filter(None, [os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)"), os.environ.get("LOCALAPPDATA")]):
+            fixed += [base + "\\Google\\Chrome\\Application\\chrome.exe", base + "\\Microsoft\\Edge\\Application\\msedge.exe"]
+    elif sys.platform == "darwin":
+        fixed += ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                  "/Applications/Chromium.app/Contents/MacOS/Chromium"]
+    for f in fixed:
+        if os.path.isfile(f):
+            return f
+    return None
+
+
+def open_player(port):
+    """Abre a página do Sincrono neste computador JÁ com o som liberado.
+
+    Navegadores bloqueiam som automático até o primeiro clique. Chrome/Edge/Chromium aceitam o
+    parâmetro --autoplay-policy=no-user-gesture-required; usamos um perfil só do Sincrono para que
+    ele valha mesmo com o navegador normal já aberto. Sem Chrome/Edge, abre o navegador padrão
+    (aí é preciso um clique em "Ativar som")."""
+    import subprocess
+    url = "http://localhost:%d/" % port
+    exe = find_chromium()
+    if exe:
+        profile = str(Path.home() / ".sincrono-browser")
+        try:
+            subprocess.Popen([exe, "--autoplay-policy=no-user-gesture-required", "--user-data-dir=" + profile,
+                              "--no-first-run", "--no-default-browser-check", "--app=" + url],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print("  página aberta com som automático (janela do Sincrono)")
+            return
+        except Exception as e:
+            print("  não consegui abrir o Chrome/Edge (%s); usando o navegador padrão" % e)
+    __import__("webbrowser").open(url)
+    print("  navegador padrão aberto: clique uma vez em \"Ativar som\" (Chrome/Edge abrem sem esse clique)")
+
+
+def main():
+    global SESSION, WEB_DIR
+    ap = argparse.ArgumentParser(description="Servidor do Sincrono para o computador.")
+    ap.add_argument("--port", type=int, default=3000)
+    ap.add_argument("--web", help="pasta da página web (padrão: detecta)")
+    ap.add_argument("--no-browser", action="store_true", help="não abrir a página no navegador deste computador")
+    ap.add_argument("--cache", default=str(Path.home() / ".sincrono-server"), help="pasta dos arquivos de áudio enviados")
+    args = ap.parse_args()
+    global CABLE
+    SESSION = Session(args.cache)
+    if calibracao_cabo is not None and calibracao_cabo.np is not None:
+        CABLE = calibracao_cabo.CableCalibration(now_ms)
+        print("  calibração por cabo (interface multicanal): disponível no painel /admin")
+    else:
+        print("  calibração por cabo: indisponível (pip install numpy sounddevice)")
+    WEB_DIR = find_web_dir(args.web)
+
+    httpd = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
+    httpd.daemon_threads = True
+    httpd.request_queue_size = 512  # muitos aparelhos entrando ao mesmo tempo
+    port = httpd.server_address[1]
+    print("Sincrono (servidor no computador) — porta %d" % port)
+    for ip in lan_addresses() or ["127.0.0.1"]:
+        print("  celulares e navegadores:  http://%s:%d" % (ip, port))
+    print("  painel do anfitrião:      http://localhost:%d/admin" % port)
+    if WEB_DIR is None:
+        print("  AVISO: pasta da página web não encontrada; use --web.")
+    zc = announce(port)
+    if not args.no_browser:
+        # Abre a página neste computador: ela também toca o metrônomo e a música aqui (clique em "Ativar som").
+        threading.Timer(1.0, lambda: open_player(port)).start()
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nEncerrando.")
+    finally:
+        if zc:
+            zc.close()
+        httpd.server_close()
+
+
+if __name__ == "__main__":
+    main()

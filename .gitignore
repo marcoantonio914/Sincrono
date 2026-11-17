@@ -1,0 +1,15 @@
+# build
+build/
+.gradle/
+*.apk
+*.aab
+local.properties
+# senhas e chaves: NUNCA no repositório
+*.jks
+*.keystore
+keystore.properties
+# python / sistema
+__pycache__/
+*.pyc
+.venv/
+.DS_Store

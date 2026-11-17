@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f8f9fa">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="stylesheet" href="/style.css">
+    <title>Sincrono</title>
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <h1>Sincrono</h1>
+        <p id="connection" aria-live="polite">Conectando…</p>
+        <p id="sync" aria-live="polite">Verificando relógio…</p>
+      </header>
+      <section id="sound-banner" class="banner" hidden>
+        <p><strong>Som desligado neste aparelho.</strong> O navegador só libera o áudio depois de um toque ou clique.</p>
+        <button id="sound-enable" type="button" class="primary">Ativar som neste aparelho</button>
+      </section>
+      <div class="tab" data-tab="sync">
+      <section class="fields" aria-label="Configurações">
+        <label>BPM <input id="bpm" type="number" min="30" max="300" value="120" inputmode="numeric"></label>
+        <label>Tempos <input id="beats" type="number" min="1" max="12" value="4" inputmode="numeric"></label>
+      </section>
+      <p id="beat" aria-live="off">—</p>
+      <section class="controls" aria-label="Controles">
+        <button id="play" type="button">Iniciar</button>
+        <button id="pause" type="button">Pausar</button>
+        <button id="restart" type="button">Reiniciar</button>
+      </section>
+      <p id="status" aria-live="polite">Parado</p>
+      <section class="offset" aria-label="Ajuste fino deste aparelho">
+        <p>Ajuste fino deste aparelho: <strong id="offset-value">0 ms</strong></p>
+        <p class="hint">Se este aparelho soa atrasado em relação aos outros, aumente (toca mais cedo). Se soa adiantado, diminua.</p>
+        <div class="offset-buttons">
+          <button type="button" data-offset="-5">−5</button>
+          <button type="button" data-offset="-1">−1</button>
+          <button type="button" data-offset="1">+1</button>
+          <button type="button" data-offset="5">+5</button>
+        </div>
+      </section>
+      </div>
+      <div class="tab" data-tab="audio" hidden>
+      <section id="groups-panel" class="offset" aria-label="Grupos">
+        <h2>Grupos de aparelhos</h2>
+        <p class="hint" id="groups-hint">Cada grupo toca o seu arquivo; todos seguem o mesmo relógio. Carregando…</p>
+        <div class="row">
+          <button id="play-all" type="button" class="primary">Tocar todos</button>
+          <button id="pause-all" type="button">Pausar todos</button>
+        </div>
+        <div id="groups-list"></div>
+        <div class="row">
+          <input id="new-group" class="grow" placeholder="Novo grupo (ex.: Violinos)" maxlength="40">
+          <button id="add-group" type="button">Criar grupo</button>
+        </div>
+      </section>
+      </div>
+      <div class="tab" data-tab="mixer" hidden>
+      <section class="offset" aria-label="Volume">
+        <h2>Volume</h2>
+        <label>Volume deste aparelho <input id="volume" type="range" min="0" max="100" value="100"></label>
+        <p id="volume-label" aria-live="polite">100%</p>
+        <p class="hint">Vale para o metrônomo e a música, junto com o volume que o anfitrião definir para este aparelho.</p>
+      </section>
+      <section id="song" class="offset" aria-label="Áudio sincronizado" hidden>
+        <h2>Áudio sincronizado</h2>
+        <p class="hint">O anfitrião escolhe o arquivo (no app ou no painel de grupos abaixo); esta página baixa e toca junto. Toque em "Ativar áudio" uma vez para o navegador liberar o som e deixe a aba aberta e visível.</p>
+        <button id="song-enable" type="button">Ativar áudio deste aparelho</button>
+        <p id="song-name"><strong></strong></p>
+        <p id="song-status" aria-live="polite"></p>
+        <p id="song-position">—</p>
+        <div class="controls">
+          <button id="song-play" type="button">Tocar</button>
+          <button id="song-pause" type="button">Pausar</button>
+        </div>
+        <div class="offset-buttons">
+          <button id="song-start" type="button">Início</button>
+          <button id="song-back" type="button">−10 s</button>
+          <button id="song-forward" type="button">+10 s</button>
+        </div>
+      </section>
+      <section id="mixer-devices" class="offset" aria-label="Mixer do anfitrião">
+        <h2>Mixer do anfitrião</h2>
+        <p class="hint" id="mixer-hint">Volume de cada aparelho da sessão.</p>
+        <div id="devices-list"></div>
+      </section>
+      </div>
+      <div class="tab" data-tab="net" hidden>
+      <section id="invite" class="offset" aria-label="Convite">
+        <h2>Convite</h2>
+        <p class="hint">No celular, abra o app e toque em "Ler QR code" (ou aponte a câmera para abrir no navegador).</p>
+        <canvas id="qr" aria-label="QR code do endereço da sessão"></canvas>
+        <p id="invite-urls"></p>
+      </section>
+      </div>
+      <div class="tab" data-tab="sync">
+      <section id="calibration" class="offset" aria-label="Calibração automática">
+        <h2>Calibração automática</h2>
+        <p class="hint">Um celular com o app novo inicia a calibração. Deixe esta aba aberta e visível, com o som ligado em volume médio e as caixas voltadas para o microfone desse celular. Não use fones.</p>
+        <button id="calib-audio" type="button">Ativar áudio deste aparelho</button>
+        <p id="calib-status" aria-live="polite"></p>
+        <ul id="calib-lines"></ul>
+        <p>Calibração deste aparelho: <strong id="calib-auto">0 ms</strong></p>
+        <button id="calib-clear" type="button">Remover calibração</button>
+      </section>
+      </div>
+    </main>
+    <nav id="tabs" aria-label="Seções">
+      <button type="button" data-go="sync">SYNC</button>
+      <button type="button" data-go="audio">ÁUDIO</button>
+      <button type="button" data-go="mixer">MIXER</button>
+      <button type="button" data-go="net">REDE</button>
+    </nav>
+    <script src="/qr.js"></script>
+    <script src="/app.js"></script>
+    <script src="/host.js"></script>
+  </body>
+</html>
