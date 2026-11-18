@@ -40,6 +40,20 @@ public final class CalibrationDsp {
         return 0.5 * (1.0 - Math.cos(2.0 * Math.PI * t / DURATION));
     }
 
+    /** Referência de correlação (seno e cosseno do chirp com janela) na taxa informada. */
+    static float[][] reference(int sampleRate) {
+        int n = (int) Math.round(DURATION * sampleRate);
+        float[] s = new float[n];
+        float[] q = new float[n];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) sampleRate;
+            double w = window(t);
+            s[i] = (float) (w * Math.sin(phase(t)));
+            q[i] = (float) (w * Math.cos(phase(t)));
+        }
+        return new float[][] {s, q};
+    }
+
     /** Valor do chirp no instante t (s) desde o início do som; 0 fora da duração. */
     public static double chirpSample(double t, double amplitude) {
         if (t < 0.0 || t >= DURATION) return 0.0;

@@ -94,6 +94,8 @@ object SessionController {
         /** Confiança da calibração em uso: "high", "medium", "low" ou "" se não há. */
         val autoQuality: String = "",
         val autoSpreadMs: Double = 0.0,
+        /** A calibração em uso é uma autocalibração (absoluta, sem referência). */
+        val autoSelf: Boolean = false,
         /** Diagnóstico de sincronização (relógio, áudio, música). */
         val sync: SyncQuality = SyncQuality(),
         /** Volume próprio deste aparelho (0..1). */
@@ -128,6 +130,8 @@ object SessionController {
     private var currentRoute = OutputRoute.Type.SPEAKER
     private var currentAuto = 0.0
     private var currentCalibrated = false
+    /** Há um valor guardado e em uso para a saída atual (no anfitrião, só vale a autocalibração). */
+    private var currentStored = false
     private var unwatchRoute: (() -> Unit)? = null
     private var unbindNetwork: (() -> Unit)? = null
 
@@ -270,6 +274,13 @@ object SessionController {
         }
     }
 
+    /** Autocalibração: este aparelho toca e grava o próprio som; não precisa de outro aparelho nem de referência. */
+    fun startSelfCalibration() {
+        val cm = calibrationManager ?: return
+        _calibration.update { it.copy(status = "Iniciando…", lines = emptyList()) }
+        cm.startSelf()
+    }
+
     /**
      * Guarda o resultado da calibração para a saída em uso, junto com o anfitrião de referência,
      * e zera o ajuste manual dessa saída (a calibração o substitui). O anfitrião é a própria
@@ -277,11 +288,13 @@ object SessionController {
      */
     @Synchronized
     fun applyAutoOffset(context: Context, ms: Double, hostId: String, quality: String, spreadMs: Double): Boolean {
-        if (currentRole == Role.HOST) return true
+        val self = hostId == CalibrationManager.SELF_REF
+        // O anfitrião é a referência das calibrações em conjunto; só a autocalibração se aplica a ele.
+        if (currentRole == Role.HOST && !self) return true
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (hostId.isNotEmpty()) sessionHostId = hostId
-        // Um resultado de baixa confiança não substitui uma calibração válida (contra este anfitrião) já em uso.
-        if (quality == "low" && currentCalibrated) {
+        if (hostId.isNotEmpty() && !self) sessionHostId = hostId
+        // Um resultado de baixa confiança não substitui uma calibração válida já em uso.
+        if (quality == "low" && currentStored) {
             refreshProfile()
             return false
         }
@@ -338,6 +351,8 @@ object SessionController {
 
         var auto = 0.0
         var calibrated = false
+        var stored = false
+        var self = false
         var quality = ""
         var spread = 0.0
         var warning: String? = null
@@ -345,6 +360,15 @@ object SessionController {
 
         if (currentRole == Role.HOST) {
             calibrated = true // o anfitrião é a referência
+            if (prefs.contains(autoKey(route)) && prefs.getString(autoRefKey(route), "") == CalibrationManager.SELF_REF) {
+                // Autocalibração do anfitrião: ele passa a soar no horário certo, e os outros se alinham a esse som.
+                auto = prefs.getFloat(autoKey(route), 0f).toDouble()
+                stored = true
+                self = true
+                quality = prefs.getString(autoQualityKey(route), "medium") ?: "medium"
+                spread = prefs.getFloat(autoSpreadKey(route), 0f).toDouble()
+                if (quality == "low") warnings.add("A autocalibração em uso tem baixa confiança. Refaça-a em silêncio.")
+            }
             if (route != OutputRoute.Type.SPEAKER) {
                 warnings.add(
                     "Como anfitrião, a saída deste aparelho é a referência das calibrações. " +
@@ -360,9 +384,12 @@ object SessionController {
             }
             if (prefs.contains(autoKey(source))) {
                 val ref = prefs.getString(autoRefKey(source), "") ?: ""
-                if (sessionHostId.isNotEmpty() && ref == sessionHostId) {
+                val isSelf = ref == CalibrationManager.SELF_REF
+                if (isSelf || (sessionHostId.isNotEmpty() && ref == sessionHostId)) {
                     auto = prefs.getFloat(autoKey(source), 0f).toDouble()
                     calibrated = true
+                    stored = true
+                    self = isSelf
                     quality = prefs.getString(autoQualityKey(source), "medium") ?: "medium"
                     spread = prefs.getFloat(autoSpreadKey(source), 0f).toDouble()
                     if (quality == "low") warnings.add("A calibração em uso tem baixa confiança. Refaça-a com os aparelhos mais próximos e em silêncio.")
@@ -386,6 +413,7 @@ object SessionController {
 
         currentAuto = auto
         currentCalibrated = calibrated
+        currentStored = stored
         engine?.userOffsetMs = manual.toDouble()
         engine?.autoOffsetMs = auto
         audioPlayer?.userOffsetMs = manual.toDouble()
@@ -397,6 +425,7 @@ object SessionController {
                 autoCalibrated = calibrated,
                 autoQuality = quality,
                 autoSpreadMs = spread,
+                autoSelf = self,
                 route = route.label,
                 routeWarning = warning,
             )

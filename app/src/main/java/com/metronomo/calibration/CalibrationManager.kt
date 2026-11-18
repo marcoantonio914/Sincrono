@@ -108,6 +108,60 @@ class CalibrationManager(
         }
     }
 
+    /**
+     * Autocalibração: este aparelho toca e grava o próprio som, sem outro aparelho nem referência.
+     * O resultado é absoluto (contra o relógio compartilhado) e é guardado com a marca [SELF_REF].
+     */
+    fun startSelf() {
+        if (ui.running) return
+        publish {
+            it.copy(
+                running = true,
+                lines = emptyList(),
+                status = "Autocalibrando… este aparelho toca e ouve o próprio som (uns 6 segundos). Fique em silêncio e não mexa nele.",
+            )
+        }
+        scope.launch(Dispatchers.Default) {
+            try {
+                val previous = if (calibrated()) autoOffset() else Double.NaN
+                val o = SelfCalibrator(clock).run()
+                playerClockState = o.clockState
+                if (!o.ok) {
+                    publish { it.copy(running = false, status = o.message) }
+                    return@launch
+                }
+                val applied = onApplyOffset(o.offsetMs, SELF_REF, o.quality, o.spreadMs)
+                val clockWarning = when (o.clockState) {
+                    AudioClockTracker.State.FALLBACK, AudioClockTracker.State.UNSTABLE ->
+                        " Atenção: o áudio deste aparelho não informou horários precisos de saída; o valor pode variar de uma medição para outra."
+                    else -> ""
+                }
+                val before = if (previous.isNaN()) "" else String.format(Locale.ROOT, " Valor anterior desta saída: %+.1f ms.", previous)
+                val text = when {
+                    !applied -> String.format(
+                        Locale.ROOT,
+                        "Resultado de baixa confiança (variação %.1f ms): mantive a calibração anterior. Tente de novo em silêncio, com o aparelho mais perto do microfone.",
+                        o.spreadMs,
+                    )
+                    o.quality == "low" -> String.format(
+                        Locale.ROOT,
+                        "Autocalibração aplicada com BAIXA confiança (variação %.1f ms, ajuste %+.1f ms). Refaça em silêncio.%s",
+                        o.spreadMs, o.offsetMs, before,
+                    )
+                    else -> String.format(
+                        Locale.ROOT,
+                        "Autocalibração concluída (confiança %s, variação %.1f ms, %d de %d sons). Este aparelho foi ajustado em %+.1f ms.%s",
+                        qualityLabel(o.quality), o.spreadMs, o.count, o.total, o.offsetMs, before,
+                    )
+                }
+                publish { it.copy(running = false, lines = emptyList(), status = text + clockWarning) }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                publish { it.copy(running = false, status = "Falha na autocalibração: ${e.message}") }
+            }
+        }
+    }
+
     private suspend fun pollLoop() {
         while (currentCoroutineContext().isActive) {
             try {
@@ -395,4 +449,9 @@ class CalibrationManager(
     }
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
+    companion object {
+        /** Marca de uma calibração absoluta (autocalibração): vale com qualquer anfitrião. */
+        const val SELF_REF = "self"
+    }
 }

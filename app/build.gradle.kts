@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = (project.findProperty("SINCRONO_VERSION_CODE") as String?)?.toIntOrNull() ?: 1
-        versionName = "0.5.0-grupos"
+        versionName = "0.6.0-autocalibracao"
     }
 
     // Assinatura do release/AAB: o build_apk.py cria a chave de upload em ~/.sincrono-keystore

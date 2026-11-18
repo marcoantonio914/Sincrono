@@ -438,7 +438,7 @@ private fun SyncTab(
         )
     }
 
-    Module("Calibração automática", if (ui.role == SessionController.Role.HOST) "referência" else if (ui.autoCalibrated) String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) else "não calibrado") {
+    Module("Calibração automática", if (ui.role == SessionController.Role.HOST && !ui.autoSelf) "referência" else if (ui.autoCalibrated) String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) else "não calibrado") {
         CalibrationSection(ui, state.playing)
     }
 }
@@ -660,6 +660,19 @@ private fun CalibrationSection(ui: UiState, playing: Boolean) {
         SessionController.startCalibration(pendingPartner, cable && advanced)
     }
 
+    // A autocalibração sempre grava o próprio microfone: sem a permissão não há o que medir.
+    val selfPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) SessionController.startSelfCalibration()
+    }
+
+    fun beginSelf() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            SessionController.startSelfCalibration()
+        } else {
+            selfPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     fun begin(partnerId: String?) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             SessionController.startCalibration(partnerId, cable && advanced)
@@ -741,24 +754,57 @@ private fun CalibrationSection(ui: UiState, playing: Boolean) {
             calib.lines.forEach { Text(it) }
 
             Text(
-                if (isHost) {
-                    "Este aparelho é o anfitrião (referência): não precisa de calibração."
+                if (isHost && !ui.autoSelf) {
+                    "Este aparelho é o anfitrião (referência das calibrações em conjunto): não precisa dela. A autocalibração, abaixo, é opcional."
                 } else if (ui.autoCalibrated) {
-                    "Calibração desta saída (${ui.route}): " + String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) +
+                    (if (ui.autoSelf) "Autocalibração desta saída (${ui.route}): " else "Calibração desta saída (${ui.route}): ") +
+                        String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) +
                         " (confiança ${qualityLabel(ui.autoQuality)}, variação " + String.format(Locale.ROOT, "%.1f ms)", ui.autoSpreadMs)
                 } else {
                     "Esta saída (${ui.route}) ainda não está calibrada."
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (!isHost) {
+            if (!isHost || ui.autoSelf) {
                 OutlinedButton(
                     onClick = { SessionController.clearAutoOffset(context) },
-                    enabled = ui.autoCalibrated,
+                    enabled = ui.autoCalibrated && !busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Remover calibração desta saída") }
             }
         }
+
+        HorizontalDivider()
+        Text("Autocalibração (este aparelho sozinho)", fontWeight = FontWeight.Bold)
+        Text(
+            "O aparelho toca um som e o próprio microfone o escuta: não precisa de outro aparelho nem de referência, " +
+                "e o valor vale em qualquer sessão. Para o grupo ficar alinhado, TODOS os aparelhos, inclusive o anfitrião, " +
+                "devem estar autocalibrados (não misture com a calibração em conjunto). " +
+                "Alto-falante: deixe o aparelho parado, em silêncio e com volume médio. " +
+                "Fone com fio: conecte-o e encoste a concha no microfone do aparelho (ou use um cabo de loopback). " +
+                "Cada tipo de saída guarda o seu valor.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        val pm = context.packageManager
+        val lowLatency = pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY)
+        val proAudio = pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_PRO)
+        Text(
+            when {
+                proAudio -> "Este aparelho declara áudio profissional (ida e volta de até 20 ms)."
+                lowLatency -> "Este aparelho declara baixa latência de áudio (saída de até 45 ms)."
+                else -> "Atenção: este aparelho não declara baixa latência de áudio. A latência pode ser maior e menos estável: " +
+                    "meça duas vezes e, se os valores diferirem mais que 2 ms, não confie neles."
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Button(
+            onClick = { beginSelf() },
+            enabled = !busy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+        ) { Text(if (playing) "Pause o metrônomo para calibrar" else "Autocalibrar este aparelho") }
+        if (!calib.supported && calib.status.isNotBlank()) Text(calib.status, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -891,7 +937,7 @@ private fun SyncQualityBlock(ui: UiState) {
         Text("Áudio: ${q.audioClockLabel}", style = MaterialTheme.typography.bodySmall)
         Text(
             when {
-                ui.role == SessionController.Role.HOST -> "Calibração: este aparelho é a referência."
+                ui.role == SessionController.Role.HOST && !ui.autoSelf -> "Calibração: este aparelho é a referência."
                 ui.autoCalibrated -> "Calibração: válida (confiança ${qualityLabel(ui.autoQuality)}, variação " +
                     String.format(Locale.ROOT, "%.1f ms)", ui.autoSpreadMs)
                 else -> "Calibração: ausente para esta saída (${ui.route})."

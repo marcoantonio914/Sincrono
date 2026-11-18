@@ -70,11 +70,11 @@ O rastreador não aloca memória nem faz I/O na thread de áudio. O estado vai p
 - Tudo que depende do Android real (timestamps, telas, SSE) só foi verificado por leitura e simulação.
 
 ## Testes
-`tools/SyncTest.java` (relógio, rastreador de timestamp, confiança), `tools/AudioSyncTest.java` (deriva da música), `tools/DspTest.java` (calibração, inclui cabo).
+`tools/SyncTest.java` (relógio, rastreador de timestamp, confiança), `tools/AudioSyncTest.java` (deriva da música), `tools/DspTest.java` (calibração, inclui cabo), `tools/SelfCalTest.java` (autocalibração).
 ```
 D=out; mkdir -p $D
-javac -encoding UTF-8 -d $D app/src/main/java/com/metronomo/diag/*.java app/src/main/java/com/metronomo/calibration/CalibrationDsp.java app/src/main/java/com/metronomo/audio/AudioSync.java tools/SyncTest.java tools/AudioSyncTest.java tools/DspTest.java
-java -cp $D SyncTest && java -cp $D AudioSyncTest && java -cp $D DspTest
+javac -encoding UTF-8 -d $D app/src/main/java/com/metronomo/diag/*.java app/src/main/java/com/metronomo/calibration/CalibrationDsp.java app/src/main/java/com/metronomo/calibration/SelfCalibrationDsp.java app/src/main/java/com/metronomo/audio/AudioSync.java tools/SyncTest.java tools/AudioSyncTest.java tools/DspTest.java tools/SelfCalTest.java
+java -cp $D SyncTest && java -cp $D AudioSyncTest && java -cp $D DspTest && java -cp $D SelfCalTest
 ```
 
 ## Computador como anfitrião e calibração por cabo
@@ -83,3 +83,13 @@ java -cp $D SyncTest && java -cp $D AudioSyncTest && java -cp $D DspTest
 - **Calibrar todos com um botão** ("Calibrar todos os aparelhos", no computador ou no celular): cada aparelho e o computador ligam a saída de fone à **mesa de som**; a mesa soma tudo e vai ao computador por USB. Cada aparelho toca o som de teste no seu horário, o computador grava, mede e manda o ajuste a cada um. Sem escolher canal nem interface (a mesa USB é escolhida automaticamente; "Avançado" permite trocar). Precisa de `numpy` e `sounddevice` (num ambiente virtual no Ubuntu). **Testado só com gravação simulada** (11 aparelhos, erro < 0,001 ms nos testes, `teste_calibracao_cabo.py`); com mesa de verdade, ainda não.
 - **Instalação no Ubuntu**: `sudo apt install python3-venv libportaudio2`, `python3 -m venv ~/sincrono-venv`, `~/sincrono-venv/bin/pip install numpy sounddevice zeroconf`, e rodar com `~/sincrono-venv/bin/python sincrono_server.py`.
 - **Diagnóstico da mesa**: `python diagnostico_interface.py` mostra o nível de cada entrada da interface.
+
+## Autocalibração (v11)
+
+Botão **"Autocalibrar este aparelho"** na seção de calibração. O aparelho toca 8 sons de teste e o **próprio microfone** os grava (alto-falante perto do microfone; com fone, encostado nele; ou cabo de loopback). Mede, em valor **absoluto**, quanto o aparelho soa depois do horário combinado no relógio compartilhado, e guarda o ajuste por tipo de saída. **Não precisa de outro aparelho nem de referência.**
+
+- O horário de cada amostra gravada vem do carimbo de tempo do microfone (`AudioRecord.getTimestamp`), que já inclui o atraso de entrada. **Se o aparelho não informa esse carimbo, o resultado não é aplicado** (a tela mostra a medida bruta só como informação).
+- Confiança: variação entre os sons (sem os extremos) e estabilidade do carimbo; baixa confiança não substitui uma calibração melhor já em uso.
+- O **anfitrião também pode se autocalibrar** e passa a soar no horário certo. Para o grupo ficar alinhado, todos (anfitrião incluído) devem estar autocalibrados. Se um aparelho for calibrado em conjunto contra um anfitrião autocalibrado, o ajuste do anfitrião é somado automaticamente.
+- A tela avisa se o aparelho não declara baixa latência (`FEATURE_AUDIO_LOW_LATENCY` / `FEATURE_AUDIO_PRO`).
+- **Verificado só por simulação** (`tools/SelfCalTest.java`: atraso, perdas de sons, ruído, saturação, jitter, carimbo instável). **Ainda não testado em aparelho real**, e o Kotlin da v11 não foi compilado. Comparar com a calibração em conjunto (mesa/cabo) nos seus aparelhos é o jeito de saber o erro real de cada modelo.

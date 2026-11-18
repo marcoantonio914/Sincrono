@@ -115,7 +115,7 @@ class CalibrationHub(private val nowMs: () -> Double) {
             if (!partner.isHost && !partner.calibrated) {
                 return fail(400, "O aparelho escolhido ainda não foi calibrado. Escolha o anfitrião ou um aparelho já calibrado.")
             }
-            partnerAuto = if (partner.isHost) 0.0 else partner.autoMs
+            partnerAuto = partner.autoMs
             ordered = listOf(partnerId, initiatorId)
             targetId = initiatorId
         } else {
@@ -123,6 +123,8 @@ class CalibrationHub(private val nowMs: () -> Double) {
             // A referência é sempre o anfitrião (se ele não estiver na lista, quem iniciou).
             val host = hostId().ifEmpty { initiatorId }
             ordered = listOf(host) + live.keys.filter { it != host }
+            // Se o anfitrião tem autocalibração aplicada, ele soa no horário certo: os outros se alinham a esse som.
+            partnerAuto = live[host]?.autoMs ?: 0.0
         }
 
         // Por cabo, só quem iniciou grava (os outros aparelhos não estão ligados à saída da mesa).
@@ -247,8 +249,10 @@ class CalibrationHub(private val nowMs: () -> Double) {
             )
         } else {
             for ((i, device) in devices.withIndex()) {
-                val offset = solution.offsetsMs[i]
-                if (offset.isNaN()) continue
+                val measured = solution.offsetsMs[i]
+                if (measured.isNaN()) continue
+                // O anfitrião (índice 0) é a referência: 0. Os outros somam o ajuste que o anfitrião já aplica.
+                val offset = if (i == 0) measured else measured + partnerAutoMs
                 out.put(
                     device.first,
                     JSONObject()
