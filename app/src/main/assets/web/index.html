@@ -25,6 +25,14 @@
         </div>
       </div>
     </section>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5l13 7.5-13 7.5z"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><path d="M5.5 5.5h13v13h-13z"/></symbol>
+      <symbol id="i-tostart" viewBox="0 0 24 24"><path d="M5 4h2.6v16H5zM20 4.5v15L9 12z"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M11.5 5v14L1.5 12zM22.5 5v14L12.5 12z"/></symbol>
+      <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12.5 5v14l10-7zM1.5 5v14l10-7z"/></symbol>
+    </svg>
     <main>
       <header class="top">
         <h1>Sincrono</h1>
@@ -36,18 +44,17 @@
         <button id="sound-enable" type="button" class="primary">Ativar som neste aparelho</button>
       </section>
       <div class="tab" data-tab="sync">
-      <section class="fields" aria-label="Configurações">
+      <section class="fields host-only" aria-label="Configurações">
         <label>BPM <input id="bpm" type="number" min="30" max="300" value="120" inputmode="numeric"></label>
         <label>Tempos <input id="beats" type="number" min="1" max="12" value="4" inputmode="numeric"></label>
       </section>
       <p id="beat" aria-live="off">—</p>
-      <section class="controls" aria-label="Controles">
-        <button id="play" type="button">Iniciar</button>
-        <button id="pause" type="button">Pausar</button>
-        <button id="restart" type="button">Reiniciar</button>
+      <section class="controls host-only" aria-label="Controles">
+        <button id="play" type="button" class="primary" aria-label="Iniciar o metrônomo (se já estiver tocando, recomeça)" title="Iniciar"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button id="pause" type="button" aria-label="Parar o metrônomo" title="Parar"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
       </section>
       <p id="status" aria-live="polite">Parado</p>
-      <section class="offset" aria-label="Ajuste fino deste aparelho">
+      <section class="offset host-only" aria-label="Ajuste fino deste aparelho">
         <p>Ajuste fino deste aparelho: <strong id="offset-value">0 ms</strong></p>
         <p class="hint">Se este aparelho soa atrasado em relação aos outros, aumente (toca mais cedo). Se soa adiantado, diminua.</p>
         <div class="offset-buttons">
@@ -59,12 +66,14 @@
       </section>
       </div>
       <div class="tab" data-tab="audio" hidden>
-      <section id="groups-panel" class="offset" aria-label="Grupos">
+      <section id="groups-panel" class="offset host-only" aria-label="Grupos">
         <h2>Grupos de aparelhos</h2>
         <p class="hint" id="groups-hint">Cada grupo toca o seu arquivo; todos seguem o mesmo relógio. Carregando…</p>
-        <div class="row">
-          <button id="play-all" type="button" class="primary">Tocar todos</button>
-          <button id="pause-all" type="button">Pausar todos</button>
+        <div class="row icons">
+          <button id="start-all" type="button" aria-label="Voltar todos ao início" title="Voltar todos ao início"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
+          <button id="play-all" type="button" class="primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+          <button id="pause-all" type="button" aria-label="Pausar todos" title="Pausar todos"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
+          <button id="stop-all" type="button" aria-label="Parar todos e voltar ao início" title="Parar todos e voltar ao início"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
         </div>
         <div id="groups-list"></div>
         <div class="row">
@@ -74,7 +83,7 @@
       </section>
       </div>
       <div class="tab" data-tab="mixer" hidden>
-      <section class="offset" aria-label="Volume">
+      <section class="offset host-only" aria-label="Volume">
         <h2>Volume</h2>
         <label>Volume deste aparelho <input id="volume" type="range" min="0" max="100" value="100"></label>
         <p id="volume-label" aria-live="polite">100%</p>
@@ -87,42 +96,32 @@
         <p id="song-name"><strong></strong></p>
         <p id="song-status" aria-live="polite"></p>
         <p id="song-position">—</p>
-        <div class="controls">
-          <button id="song-play" type="button">Tocar</button>
-          <button id="song-pause" type="button">Pausar</button>
+        <div class="controls host-only">
+          <button id="song-play" type="button" class="primary" aria-label="Tocar" title="Tocar"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+          <button id="song-pause" type="button" aria-label="Pausar" title="Pausar"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
+          <button id="song-stop" type="button" aria-label="Parar e voltar ao início" title="Parar e voltar ao início"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
         </div>
-        <div class="offset-buttons">
-          <button id="song-start" type="button">Início</button>
-          <button id="song-back" type="button">−10 s</button>
-          <button id="song-forward" type="button">+10 s</button>
+        <div class="offset-buttons host-only">
+          <button id="song-start" type="button" aria-label="Voltar ao início" title="Voltar ao início"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
+          <button id="song-back" type="button" aria-label="Voltar 10 segundos" title="Voltar 10 segundos"><svg class="ico" aria-hidden="true"><use href="#i-back"/></svg> 10</button>
+          <button id="song-forward" type="button" aria-label="Avançar 10 segundos" title="Avançar 10 segundos"><svg class="ico" aria-hidden="true"><use href="#i-fwd"/></svg> 10</button>
         </div>
       </section>
-      <section id="mixer-devices" class="offset" aria-label="Mixer do anfitrião">
+      <section id="mixer-devices" class="offset host-only" aria-label="Mixer do anfitrião">
         <h2>Mixer do anfitrião</h2>
         <p class="hint" id="mixer-hint">Volume de cada aparelho da sessão.</p>
         <div id="devices-list"></div>
       </section>
       </div>
       <div class="tab" data-tab="net" hidden>
-      <section id="invite" class="offset" aria-label="Convite">
+      <section id="invite" class="offset host-only" aria-label="Convite">
         <h2>Convite</h2>
         <p class="hint">No celular, abra o app e toque em "Ler QR code" (ou aponte a câmera para abrir no navegador).</p>
         <canvas id="qr" aria-label="QR code do endereço da sessão"></canvas>
         <p id="invite-urls"></p>
-        <button id="leave-session" type="button" hidden>Sair desta sessão</button>
       </section>
       </div>
       <div class="tab" data-tab="sync">
-      <section id="host-calib" class="offset" aria-label="Calibrar" hidden>
-        <h2>Calibrar todos os aparelhos</h2>
-        <p class="hint" id="host-calib-hint"></p>
-        <button id="calib-start" type="button" class="primary big">Calibrar todos os aparelhos</button>
-        <p id="calib-start-msg" aria-live="polite"></p>
-        <details id="calib-advanced" hidden>
-          <summary>Avançado</summary>
-          <label>Entrada de áudio do computador <select id="calib-iface"><option value="">Automática</option></select></label>
-        </details>
-      </section>
       <section id="calibration" class="offset" aria-label="Calibração automática">
         <h2>Resultado da calibração</h2>
         <p class="hint" id="calib-hint">Um celular com o app novo inicia a calibração. Deixe esta aba aberta e visível, com o som ligado em volume médio e as caixas voltadas para o microfone desse celular. Não use fones.</p>
@@ -132,9 +131,19 @@
         <p>Calibração deste aparelho: <strong id="calib-auto">0 ms</strong></p>
         <button id="calib-clear" type="button">Remover calibração</button>
       </section>
+      <section id="nickname" class="offset guest-only" aria-label="Nome deste aparelho">
+        <h2>Nome deste aparelho</h2>
+        <p class="hint">O anfitrião vê este nome na lista de aparelhos e grupos.</p>
+        <div class="row">
+          <input id="nickname-input" class="grow" maxlength="24" placeholder="Ex.: Violino da Ana">
+          <button id="nickname-save" type="button">Salvar</button>
+        </div>
+        <p id="nickname-msg" aria-live="polite"></p>
+      </section>
       </div>
+      <button id="leave-session" type="button" hidden>Sair desta sessão</button>
     </main>
-    <nav id="tabs" aria-label="Seções">
+    <nav id="tabs" class="host-only" aria-label="Seções">
       <button type="button" data-go="sync">SYNC</button>
       <button type="button" data-go="audio">ÁUDIO</button>
       <button type="button" data-go="mixer">MIXER</button>

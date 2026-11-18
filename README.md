@@ -1,3 +1,5 @@
+> **Para continuar o trabalho (pessoa ou agente de IA): leia primeiro `CONTINUAR.md`** (estado atual, regras, mapa do código, pendências). Estudo de partitura na tela: `docs/PARTITURA.md`.
+
 # Sincrono v8 (Android + servidor para o computador)
 
 Pasta nova; `sincrono` (v7 + banner) e as anteriores não foram alteradas. App `com.sincrono.app`.
@@ -93,3 +95,13 @@ Botão **"Autocalibrar este aparelho"** na seção de calibração. O aparelho t
 - O **anfitrião também pode se autocalibrar** e passa a soar no horário certo. Para o grupo ficar alinhado, todos (anfitrião incluído) devem estar autocalibrados. Se um aparelho for calibrado em conjunto contra um anfitrião autocalibrado, o ajuste do anfitrião é somado automaticamente.
 - A tela avisa se o aparelho não declara baixa latência (`FEATURE_AUDIO_LOW_LATENCY` / `FEATURE_AUDIO_PRO`).
 - **Verificado só por simulação** (`tools/SelfCalTest.java`: atraso, perdas de sons, ruído, saturação, jitter, carimbo instável). **Ainda não testado em aparelho real**, e o Kotlin da v11 não foi compilado. Comparar com a calibração em conjunto (mesa/cabo) nos seus aparelhos é o jeito de saber o erro real de cada modelo.
+
+## v12: parar, ícones, tela do cliente, apelidos
+
+- **Parar** (⏹): todos os aparelhos param no mesmo instante combinado e a música volta ao início; vale por grupo e para "todos os grupos". Tocar e pausar já eram agendados (início em +2,5 s, parada em +1,2 s).
+- Botões de transporte só com **ícones** no app e na página web. O metrônomo tem ▶ (inicia ou recomeça) e ⏹.
+- **Cliente vê só o básico:** metrônomo e música apenas para acompanhar (barra de progresso e tempo), botão de autocalibrar e o nome do aparelho. O anfitrião mantém todas as opções.
+- **Apelido** do aparelho (cliente): aparece para o anfitrião nas listas de aparelhos, grupos e mixer.
+- O anfitrião **renomeia grupos** (botão "Renomear" em cada grupo).
+- Calibração por cabo retirada da interface (veja `CONTINUAR.md` sobre o código legado).
+- Testes novos: `servidor-pc/teste_transporte.py`.

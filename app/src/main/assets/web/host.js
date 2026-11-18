@@ -64,7 +64,15 @@
     b.addEventListener('click', onClick);
     return b;
   }
-  function row() { const d = document.createElement('div'); d.className = 'row'; return d; }
+  function row(cls) { const d = document.createElement('div'); d.className = 'row' + (cls ? ' ' + cls : ''); return d; }
+  // Botão só com ícone (nome em aria-label/title para leitores de tela e dicas).
+  function iconButton(name, label, onClick, cls, disabled) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('aria-label', label); b.title = label; if (cls) b.className = cls; if (disabled) b.disabled = true;
+    b.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+    b.addEventListener('click', onClick);
+    return b;
+  }
 
   // ---------- grupos ----------
   function renderGroups() {
@@ -93,23 +101,25 @@
         const note = document.createElement('span'); note.className = 'muted grow'; note.textContent = 'O arquivo deste grupo é escolhido no app do celular anfitrião.';
         r1.appendChild(note);
       }
-      r1.append(
-        button('Tocar', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'play' }).then(refresh), '', !g.file || g.playing),
-        button('Pausar', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'pause' }).then(refresh), '', !g.playing),
-      );
       d.appendChild(r1);
+      const r1b = row('icons');
+      r1b.append(
+        iconButton('tostart', 'Voltar ao início', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'seek', positionMs: 0 }).then(refresh), '', !g.file),
+        iconButton('play', 'Tocar', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'play' }).then(refresh), 'primary', !g.file || g.playing),
+        iconButton('pause', 'Pausar', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'pause' }).then(refresh), '', !g.playing),
+        iconButton('stop', 'Parar e voltar ao início', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'stop' }).then(refresh), '', !g.file),
+      );
+      d.appendChild(r1b);
       const vol = row();
       const lab = document.createElement('span'); lab.className = 'muted'; lab.textContent = 'Volume do grupo';
       const sl = slider('g:' + g.id, mix['g:' + g.id] ?? 1, (v) => api('/api/mix', { device: 'g:' + g.id, level: v })); sl.className = 'grow';
       vol.append(lab, sl); d.appendChild(vol);
+      const r2 = row();
+      r2.appendChild(button('Renomear', () => { const n = prompt('Novo nome do grupo', g.name); if (n && n.trim()) api('/api/groups', { op: 'rename', id: g.id, name: n.trim() }).then(refresh); }));
       if (g.id !== 'g1') {
-        const r2 = row();
-        r2.append(
-          button('Renomear', () => { const n = prompt('Novo nome do grupo', g.name); if (n) api('/api/groups', { op: 'rename', id: g.id, name: n }).then(refresh); }),
-          button('Remover grupo', () => { if (confirm(`Remover o grupo "${g.name}"? Os aparelhos voltam ao grupo Geral.`)) api('/api/groups', { op: 'remove', id: g.id }).then(refresh); }, 'danger'),
-        );
-        d.appendChild(r2);
+        r2.appendChild(button('Remover grupo', () => { if (confirm(`Remover o grupo "${g.name}"? Os aparelhos voltam ao grupo Geral.`)) api('/api/groups', { op: 'remove', id: g.id }).then(refresh); }, 'danger'));
       }
+      d.appendChild(r2);
       const members = devices.filter((x) => x.group === g.id);
       const m = document.createElement('p'); m.className = 'muted';
       m.textContent = members.length ? 'Aparelhos: ' + members.map((x) => x.name).join(', ') : 'Nenhum aparelho neste grupo.';
@@ -186,6 +196,8 @@
 
   $('play-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'play' }).then(refresh));
   $('pause-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'pause' }).then(refresh));
+  $('stop-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'stop' }).then(refresh));
+  $('start-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'seek', positionMs: 0 }).then(refresh));
   $('add-group').addEventListener('click', () => {
     const name = $('new-group').value.trim();
     if (name) api('/api/groups', { op: 'add', name }).then(() => { $('new-group').value = ''; refresh(); });
@@ -235,62 +247,44 @@
     if (b && back) { b.hidden = false; b.onclick = () => { try { sessionStorage.removeItem('sincrono.voltar'); } catch { /* */ } location.href = back; }; }
   }
 
-  // ---------- calibrar todos (um botão) ----------
-  async function updateHostCalib() {
-    const panel = $('host-calib');
-    if (!panel) return;
-    const supported = typeof calibSupported !== 'undefined' && calibSupported;
-    panel.hidden = !supported;
-    if (!supported) return;
-    const pc = caps.host === 'pc';
-    $('host-calib-hint').textContent = pc
-      ? 'Ligue a saída de fone de cada aparelho (e a deste computador) à mesa de som, e a mesa ao computador por USB. Com o app aberto e o som ativo em todos, é só clicar.'
-      : 'Coloque os aparelhos perto uns dos outros, em silêncio e com volume médio. Os que têm microfone gravam os outros.';
-    const busy = (typeof calibTicker !== 'undefined' && calibTicker !== null) || (typeof state !== 'undefined' && state.playing);
-    const btn = $('calib-start');
-    btn.disabled = busy;
-    btn.textContent = (typeof state !== 'undefined' && state.playing) ? 'Pause o metrônomo para calibrar' : 'Calibrar todos os aparelhos';
-  }
-  $('calib-start').addEventListener('click', async () => {
-    const msg = $('calib-start-msg');
-    msg.textContent = '';
-    try {
-      const r = await fetch('/api/calib/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initiator: deviceId }) });
-      const d = await r.json().catch(() => ({}));
-      msg.textContent = r.ok ? 'Calibrando… não mexa nos cabos nem no volume.' : '⚠ ' + (d.error || 'Não foi possível iniciar a calibração.');
-    } catch { msg.textContent = '⚠ Sem conexão com o anfitrião.'; }
-  });
-  async function setupCalibAdvanced() {
-    if (caps.host !== 'pc' || !caps.local || !caps.calibration) return;
-    try {
-      const r = await api('/api/calib/interfaces', undefined, true);
-      const sel = $('calib-iface');
-      for (const i of r.interfaces) sel.add(new Option(`${i.name} (${i.channels} canais)`, i.index, false, i.index === r.selected));
-      sel.onchange = () => api('/api/calib/interface', { index: sel.value === '' ? null : Number(sel.value) }, true).catch(() => {});
-      $('calib-advanced').hidden = r.interfaces.length === 0;
-    } catch { /* sem interface listada */ }
-  }
-  // Textos da seção de resultado conforme quem anfitria.
+  // Textos da seção de resultado da calibração (esta página só toca os sons quando um celular calibra).
   function setupCalibTexts() {
+    const section = $('calibration');
+    if (!section) return;
+    if (caps.local) { section.hidden = true; return; } // no computador anfitrião não há calibração nesta página
     const hint = $('calib-hint');
-    if (!hint) return;
-    if (caps.host === 'pc') {
-      hint.textContent = 'A calibração é feita pelo computador anfitrião, por cabo. Deixe esta página aberta e com o som ativo.';
-    }
-    if (caps.local) {
-      const c = $('calib-clear'); if (c) c.hidden = true;
-      const own = $('calib-auto'); if (own && own.parentElement) own.parentElement.hidden = true; // o anfitrião é a referência
+    if (hint && caps.host === 'pc') {
+      hint.textContent = 'A calibração de cada celular é feita no próprio app (botão "Autocalibrar"). Esta página não calibra.';
     }
     const a = $('calib-audio');
-    if (a) setInterval(() => { a.hidden = soundRunning(); }, 500); // o som libera sozinho no Chrome/Edge do servidor
+    if (a) setInterval(() => { a.hidden = soundRunning(); }, 500);
   }
 
   let start = 'sync';
   try { start = localStorage.getItem('sincrono.tab') || 'sync'; } catch { /* sem armazenamento */ }
+  // Só o anfitrião (a página aberta no próprio computador do servidor) tem todos os controles.
+  // Quem entra de outro aparelho vê o básico: acompanhar o metrônomo e a música, e dar um apelido ao aparelho.
+  function setupNickname() {
+    const input = $('nickname-input'), save = $('nickname-save'), msg = $('nickname-msg');
+    if (!input || !save) return;
+    input.value = deviceName === defaultDeviceName ? '' : deviceName;
+    save.onclick = () => {
+      const v = input.value.trim().replace(/\s+/g, ' ').slice(0, 24);
+      try { if (v) localStorage.setItem('sincrono.nickname', v); else localStorage.removeItem('sincrono.nickname'); } catch { /* sem armazenamento */ }
+      deviceName = v || defaultDeviceName;
+      msg.textContent = 'Salvo. O anfitrião verá o novo nome em instantes.';
+    };
+  }
   loadCaps().then(() => {
-    setupStart(); setupLeave(); setupCalibTexts(); setupCalibAdvanced();
+    const guest = !caps.local || new URLSearchParams(location.search).get('guest') === '1';
+    document.body.classList.toggle('guest', guest);
+    if (guest) {
+      document.querySelectorAll('.tab').forEach((el) => { el.hidden = false; });
+      setupLeave(); setupCalibTexts(); setupNickname();
+      return;
+    }
+    setupStart(); setupLeave(); setupCalibTexts();
     showTab(start); setInterval(refresh, 1500);
-    updateHostCalib(); setInterval(updateHostCalib, 1000);
   });
 })();
 

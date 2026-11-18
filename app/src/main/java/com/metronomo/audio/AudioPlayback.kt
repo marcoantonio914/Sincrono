@@ -108,6 +108,7 @@ class AudioPlayback(
         if (ui.fileName.isEmpty()) return null
         if (!p.playing) return p.positionMs
         val now = clock.nowServerMs()
+        if (p.resetOnStop && !p.stopAt.isNaN() && now >= p.stopAt) return 0.0
         val end = if (p.stopAt.isNaN()) now else minOf(now, p.stopAt)
         val pos = p.positionMs + maxOf(0.0, end - p.startAt)
         return if (ui.durationMs > 0) minOf(pos, ui.durationMs) else pos
@@ -221,6 +222,7 @@ class AudioPlayback(
                 startAt = json.optDouble("startAt"),
                 positionMs = json.optDouble("positionMs"),
                 stopAt = stopAt,
+                resetOnStop = json.optBoolean("resetOnStop"),
             )
             lastPlan = plan
             player.plan = plan

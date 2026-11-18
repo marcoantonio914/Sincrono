@@ -74,6 +74,7 @@ class Hub:
         self.start_at = 0.0
         self.position_ms = 0.0
         self.stop_at = None
+        self.reset_on_stop = False  # a parada agendada é um "parar" (volta ao início)
         self.peers = {}             # device -> (lastSeen, readyId)
 
     def set_file(self, path, name, mime, size):
@@ -84,6 +85,7 @@ class Hub:
             self.playing = False
             self.position_ms = 0.0
             self.stop_at = None
+            self.reset_on_stop = False
             self.revision += 1
             if old:
                 try:
@@ -103,6 +105,7 @@ class Hub:
             self.playing = False
             self.position_ms = 0.0
             self.stop_at = None
+            self.reset_on_stop = False
             self.revision += 1
         self._notify()
 
@@ -112,16 +115,17 @@ class Hub:
 
     def _normalize(self):
         if self.playing and self.stop_at is not None and now_ms() > self.stop_at + 300:
-            self.position_ms += max(0.0, self.stop_at - self.start_at)
+            self.position_ms = 0.0 if self.reset_on_stop else self.position_ms + max(0.0, self.stop_at - self.start_at)
             self.playing = False
             self.stop_at = None
+            self.reset_on_stop = False
             self.revision += 1
 
     def _position_at(self, t):
         if not self.playing or t <= self.start_at:
             return self.position_ms
         if self.stop_at is not None and t >= self.stop_at:
-            return self.position_ms + max(0.0, self.stop_at - self.start_at)
+            return 0.0 if self.reset_on_stop else self.position_ms + max(0.0, self.stop_at - self.start_at)
         return self.position_ms + (t - self.start_at)
 
     def has_file(self):
@@ -161,6 +165,7 @@ class Hub:
                 "startAt": int(self.start_at),
                 "positionMs": self.position_ms,
                 "stopAt": None if self.stop_at is None else int(self.stop_at),
+                "resetOnStop": self.reset_on_stop,
                 "ready": ready,
                 "devices": len(live),
             })
@@ -180,6 +185,7 @@ class Hub:
                     self.start_at = now + AUDIO_LEAD_MS
                     self.position_ms = max(0.0, float(start_from))
                     self.stop_at = None
+                    self.reset_on_stop = False
                     self.playing = True
                     self.revision += 1
             elif kind == "pause":
@@ -191,6 +197,7 @@ class Hub:
                     self.revision += 1
             elif kind == "seek":
                 target = max(0.0, float(requested or 0.0))
+                self.reset_on_stop = False
                 if self.playing:
                     self.start_at = now + AUDIO_LEAD_MS
                     self.position_ms = target
@@ -199,9 +206,18 @@ class Hub:
                     self.position_ms = target
                 self.revision += 1
             elif kind == "stop":
-                self.playing = False
-                self.position_ms = 0.0
-                self.stop_at = None
+                # Parar = pausar num instante combinado (todos param juntos) e voltar ao início.
+                if self.playing and self.stop_at is None:
+                    if now < self.start_at:
+                        self.playing = False
+                        self.position_ms = 0.0
+                    else:
+                        self.stop_at = now + AUDIO_STOP_MS
+                        self.reset_on_stop = True
+                elif self.playing:
+                    self.reset_on_stop = True
+                else:
+                    self.position_ms = 0.0
                 self.revision += 1
             else:
                 return 400, {"error": "Comando inválido."}

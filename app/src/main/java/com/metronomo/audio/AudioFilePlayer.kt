@@ -40,6 +40,8 @@ class AudioFilePlayer(private val clock: ClockSync) {
         val positionMs: Double,
         /** Instante agendado da parada (NaN = sem parada agendada). */
         val stopAt: Double,
+        /** A parada agendada é um "parar": depois dela a posição volta a 0. */
+        val resetOnStop: Boolean = false,
     )
 
     @Volatile

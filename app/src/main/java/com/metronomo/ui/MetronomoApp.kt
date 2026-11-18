@@ -29,11 +29,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -84,10 +83,13 @@ fun MetronomoApp() {
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
         ) {
-            if (ui.active) SessionScreen(ui, tab) else StartScreen(ui)
+            if (!ui.active) StartScreen(ui)
+            else if (ui.role == SessionController.Role.HOST) SessionScreen(ui, tab)
+            else GuestScreen(ui)
         }
         AdBanner()
-        if (ui.active) BottomTabs(tab) { tab = it }
+        // Só o anfitrião tem todas as seções; o cliente vê uma tela única e simples.
+        if (ui.active && ui.role == SessionController.Role.HOST) BottomTabs(tab) { tab = it }
     }
 }
 
@@ -408,24 +410,16 @@ private fun SyncTab(
             FilledTonalButton(onClick = { setBeats((beats + 1).coerceIn(MetronomeState.MIN_BEATS, MetronomeState.MAX_BEATS)) }, modifier = Modifier.height(48.dp)) { Text("+1") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { SessionController.sendCommand("play", bpm, beats) },
-                modifier = Modifier
-                    .weight(2f)
-                    .height(56.dp),
-            ) { Text("Iniciar", fontSize = 17.sp) }
-            FilledTonalButton(
-                onClick = { SessionController.sendCommand("pause", bpm, beats) },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
-            ) { Text("Pausar") }
-            FilledTonalButton(
-                onClick = { SessionController.sendCommand("restart", bpm, beats) },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
-            ) { Text("Reiniciar") }
+            TransportButton(
+                Glyph.PLAY, "Iniciar o metrônomo (se já estiver tocando, recomeça do primeiro tempo)",
+                { SessionController.sendCommand("play", bpm, beats) },
+                Modifier.weight(2f), primary = true,
+            )
+            TransportButton(
+                Glyph.STOP, "Parar o metrônomo",
+                { SessionController.sendCommand("pause", bpm, beats) },
+                Modifier.weight(1f),
+            )
         }
     }
 
@@ -439,7 +433,7 @@ private fun SyncTab(
     }
 
     Module("Calibração automática", if (ui.role == SessionController.Role.HOST && !ui.autoSelf) "referência" else if (ui.autoCalibrated) String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) else "não calibrado") {
-        CalibrationSection(ui, state.playing)
+        CalibrationSection(ui, state.playing, groupCalibration = true)
     }
 }
 
@@ -484,15 +478,12 @@ private fun GroupsPanel() {
             style = MaterialTheme.typography.bodySmall,
             color = Pal.Graphite,
         )
+        Text("Todos os grupos", fontWeight = FontWeight.Medium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { SessionController.audioCommand("play", "all") },
-                modifier = Modifier.weight(1f).height(52.dp),
-            ) { Text("Tocar todos") }
-            FilledTonalButton(
-                onClick = { SessionController.audioCommand("pause", "all") },
-                modifier = Modifier.weight(1f).height(52.dp),
-            ) { Text("Pausar todos") }
+            TransportButton(Glyph.TO_START, "Voltar todos ao início", { SessionController.audioToStart("all") }, Modifier.weight(1f))
+            TransportButton(Glyph.PLAY, "Tocar todos", { SessionController.audioCommand("play", "all") }, Modifier.weight(1f), primary = true)
+            TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.audioCommand("pause", "all") }, Modifier.weight(1f))
+            TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.audioCommand("stop", "all") }, Modifier.weight(1f))
         }
         info.groups.forEach { g ->
             HorizontalDivider(color = Pal.Hairline)
@@ -542,18 +533,52 @@ private fun GroupsPanel() {
 
 @Composable
 private fun GroupRow(g: GroupInfo, level: Float, onPick: () -> Unit) {
+    var editing by remember(g.id) { mutableStateOf(false) }
+    var name by remember(g.id) { mutableStateOf(g.name) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusDot(if (g.playing) Pal.Ok else Pal.Recessed, 8.dp)
-                Text(g.name, fontWeight = FontWeight.Medium)
+        if (editing) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(40) },
+                    singleLine = true,
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = {
+                        SessionController.renameGroup(g.id, name.trim())
+                        editing = false
+                    },
+                    enabled = name.isNotBlank(),
+                    modifier = Modifier.height(56.dp),
+                ) { Text("Salvar") }
             }
-            Text(g.file ?: "sem arquivo", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusDot(if (g.playing) Pal.Ok else Pal.Recessed, 8.dp)
+                    Text(g.name, fontWeight = FontWeight.Medium)
+                }
+                Text(g.file ?: "sem arquivo", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilledTonalButton(onClick = onPick, modifier = Modifier.weight(1.4f)) { Text(if (g.file == null) "Escolher arquivo" else "Trocar") }
-            FilledTonalButton(onClick = { SessionController.audioCommand("play", g.id) }, enabled = g.file != null && !g.playing, modifier = Modifier.weight(1f)) { Text("Tocar") }
-            FilledTonalButton(onClick = { SessionController.audioCommand("pause", g.id) }, enabled = g.playing, modifier = Modifier.weight(1f)) { Text("Pausar") }
+            OutlinedButton(
+                onClick = {
+                    name = g.name
+                    editing = !editing
+                },
+                modifier = Modifier.weight(1f),
+            ) { Text(if (editing) "Cancelar" else "Renomear") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TransportButton(Glyph.TO_START, "Voltar ao início", { SessionController.audioToStart(g.id) }, Modifier.weight(1f), enabled = g.file != null)
+            TransportButton(Glyph.PLAY, "Tocar", { SessionController.audioCommand("play", g.id) }, Modifier.weight(1f), enabled = g.file != null && !g.playing, primary = true)
+            TransportButton(Glyph.PAUSE, "Pausar", { SessionController.audioCommand("pause", g.id) }, Modifier.weight(1f), enabled = g.playing)
+            TransportButton(Glyph.STOP, "Parar e voltar ao início", { SessionController.audioCommand("stop", g.id) }, Modifier.weight(1f), enabled = g.file != null)
         }
         Fader("Volume do grupo", level, key = g.id, onFinish = { SessionController.setGroupVolume(g.id, it.toDouble()) })
         if (g.id != "g1") {
@@ -646,148 +671,41 @@ private fun NetworkTab(ui: UiState) {
 }
 
 @Composable
-private fun CalibrationSection(ui: UiState, playing: Boolean) {
+private fun CalibrationSection(ui: UiState, playing: Boolean, groupCalibration: Boolean) {
     val context = LocalContext.current
     val calib by SessionController.calibration.collectAsState()
-    // Parceiro escolhido (null = calibrar todos) enquanto a permissão do microfone é pedida.
-    var pendingPartner by remember { mutableStateOf<String?>(null) }
-    // Modo cabo: os aparelhos ligam a saída de fone a uma mesa de som e este aparelho grava a saída da mesa.
-    var cable by remember { mutableStateOf(false) }
-    // Opções avançadas (modo cabo e calibrar só este aparelho) ficam escondidas: o caminho simples é o botão grande.
-    var advanced by remember { mutableStateOf(false) }
-    // Inicia mesmo sem a permissão: o aparelho ainda toca o som, só não grava.
+    // Inicia mesmo sem a permissão: o aparelho ainda toca o som, só não grava (calibração em conjunto).
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        SessionController.startCalibration(pendingPartner, cable && advanced)
+        SessionController.startCalibration(null)
     }
-
     // A autocalibração sempre grava o próprio microfone: sem a permissão não há o que medir.
     val selfPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) SessionController.startSelfCalibration()
     }
 
+    fun hasMic() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
     fun beginSelf() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            SessionController.startSelfCalibration()
-        } else {
-            selfPermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        if (hasMic()) SessionController.startSelfCalibration() else selfPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
-    fun begin(partnerId: String?) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            SessionController.startCalibration(partnerId, cable && advanced)
-        } else {
-            pendingPartner = partnerId
-            micPermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
+    fun beginGroup() {
+        if (hasMic()) SessionController.startCalibration(null) else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     val busy = calib.running || playing
-    val pairPartners = calib.peers.filter { !it.me && (it.host || it.calibrated) }
     val isHost = ui.role == SessionController.Role.HOST
+    val pm = context.packageManager
+    val lowLatency = pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY)
+    val proAudio = pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_PRO)
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (!calib.supported) {
-            Text(
-                "O anfitrião desta sessão não oferece calibração automática. Use este app como anfitrião ou ajuste manualmente.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        } else {
-            Text(
-                "O anfitrião é sempre a referência: cada aparelho é ajustado para soar junto com ele. " +
-                    "Coloque os aparelhos perto uns dos outros, fique em silêncio e use volume médio. " +
-                    "A calibração substitui o ajuste manual da saída em uso.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            if (advanced) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Switch(checked = cable, onCheckedChange = { cable = it }, enabled = !busy)
-                Text("Calibração por cabo (mesa de som)", modifier = Modifier.weight(1f))
-            }
-            if (!advanced) {
-                // Sem opções: o botão abaixo calibra todos os aparelhos.
-            } else if (cable) {
-                Text(
-                    "Modo cabo: ligue a saída de fone de CADA aparelho (inclusive o anfitrião e este) a um canal da mesa. " +
-                        "Ligue a saída principal da mesa (com o ganho no mínimo, ou um atenuador) à entrada de microfone deste aparelho: " +
-                        "só ele grava. Deixe os canais da mesa sem equalização e com níveis parecidos. " +
-                        "O anfitrião precisa estar ligado à mesa, pois é a referência. A calibração vale para a saída de fone com fio.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            } else {
-                Text(
-                    "Fones: para calibrar o alto-falante, desconecte-os. Para calibrar o fone, " +
-                        "segure-o junto ao microfone do outro aparelho. Cada tipo de saída guarda a sua própria calibração.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Button(
-                onClick = { begin(null) },
-                enabled = !busy,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-            ) { Text(if (playing) "Pause o metrônomo para calibrar" else "Calibrar todos os aparelhos") }
-            OutlinedButton(
-                onClick = { advanced = !advanced },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (advanced) "Ocultar opções avançadas" else "Opções avançadas (cabo, só este aparelho)") }
-
-            if (advanced && !isHost) {
-                if (pairPartners.isEmpty()) {
-                    Text(
-                        "Para calibrar só este aparelho (sem refazer os outros), é preciso o anfitrião ou outro aparelho já calibrado na sessão.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                } else {
-                    Text("Calibrar só este aparelho, usando como referência:", style = MaterialTheme.typography.bodySmall)
-                    pairPartners.forEach { peer ->
-                        FilledTonalButton(
-                            onClick = { begin(peer.id) },
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(peer.name + if (peer.host) " (anfitrião)" else "") }
-                    }
-                }
-            }
-
-            if (calib.status.isNotBlank()) Text(calib.status, fontWeight = FontWeight.Bold)
-            calib.lines.forEach { Text(it) }
-
-            Text(
-                if (isHost && !ui.autoSelf) {
-                    "Este aparelho é o anfitrião (referência das calibrações em conjunto): não precisa dela. A autocalibração, abaixo, é opcional."
-                } else if (ui.autoCalibrated) {
-                    (if (ui.autoSelf) "Autocalibração desta saída (${ui.route}): " else "Calibração desta saída (${ui.route}): ") +
-                        String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) +
-                        " (confiança ${qualityLabel(ui.autoQuality)}, variação " + String.format(Locale.ROOT, "%.1f ms)", ui.autoSpreadMs)
-                } else {
-                    "Esta saída (${ui.route}) ainda não está calibrada."
-                },
-                style = MaterialTheme.typography.bodySmall,
-            )
-            if (!isHost || ui.autoSelf) {
-                OutlinedButton(
-                    onClick = { SessionController.clearAutoOffset(context) },
-                    enabled = ui.autoCalibrated && !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Remover calibração desta saída") }
-            }
-        }
-
-        HorizontalDivider()
-        Text("Autocalibração (este aparelho sozinho)", fontWeight = FontWeight.Bold)
         Text(
-            "O aparelho toca um som e o próprio microfone o escuta: não precisa de outro aparelho nem de referência, " +
-                "e o valor vale em qualquer sessão. Para o grupo ficar alinhado, TODOS os aparelhos, inclusive o anfitrião, " +
-                "devem estar autocalibrados (não misture com a calibração em conjunto). " +
-                "Alto-falante: deixe o aparelho parado, em silêncio e com volume médio. " +
-                "Fone com fio: conecte-o e encoste a concha no microfone do aparelho (ou use um cabo de loopback). " +
-                "Cada tipo de saída guarda o seu valor.",
+            "O aparelho toca um som e o próprio microfone o escuta: não precisa de outro aparelho. " +
+                "Fique em silêncio, com o aparelho parado e volume médio. Com fone com fio, conecte-o e encoste a concha no microfone do aparelho. " +
+                "Cada tipo de saída (alto-falante, fone) guarda o seu valor. Para o grupo ficar alinhado, todos os aparelhos, o anfitrião inclusive, devem estar autocalibrados.",
             style = MaterialTheme.typography.bodySmall,
         )
-        val pm = context.packageManager
-        val lowLatency = pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY)
-        val proAudio = pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_PRO)
         Text(
             when {
                 proAudio -> "Este aparelho declara áudio profissional (ida e volta de até 20 ms)."
@@ -803,8 +721,45 @@ private fun CalibrationSection(ui: UiState, playing: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-        ) { Text(if (playing) "Pause o metrônomo para calibrar" else "Autocalibrar este aparelho") }
-        if (!calib.supported && calib.status.isNotBlank()) Text(calib.status, fontWeight = FontWeight.Bold)
+        ) { Text(if (playing) "Pare o metrônomo para calibrar" else "Autocalibrar este aparelho") }
+
+        if (calib.status.isNotBlank()) Text(calib.status, fontWeight = FontWeight.Bold)
+        calib.lines.forEach { Text(it) }
+
+        Text(
+            if (ui.autoCalibrated && (!isHost || ui.autoSelf)) {
+                (if (ui.autoSelf) "Autocalibração desta saída (${ui.route}): " else "Calibração desta saída (${ui.route}): ") +
+                    String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) +
+                    " (confiança ${qualityLabel(ui.autoQuality)}, variação " + String.format(Locale.ROOT, "%.1f ms)", ui.autoSpreadMs)
+            } else {
+                "Esta saída (${ui.route}) ainda não está calibrada."
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (!isHost || ui.autoSelf) {
+            OutlinedButton(
+                onClick = { SessionController.clearAutoOffset(context) },
+                enabled = ui.autoCalibrated && !busy,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Remover calibração desta saída") }
+        }
+
+        if (groupCalibration && calib.supported) {
+            HorizontalDivider()
+            Text("Calibração em conjunto (só o anfitrião)", fontWeight = FontWeight.Bold)
+            Text(
+                "Alternativa: calibra todos os aparelhos de uma vez, medindo as diferenças entre eles pelo microfone, com o anfitrião como referência. " +
+                    "Coloque os aparelhos perto uns dos outros e fique em silêncio. Não misture com a autocalibração, a menos que o anfitrião também esteja autocalibrado.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            FilledTonalButton(
+                onClick = { beginGroup() },
+                enabled = !busy,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) { Text("Calibrar todos os aparelhos") }
+        }
     }
 }
 
@@ -863,34 +818,14 @@ private fun AudioSection(ui: UiState) {
                 textAlign = TextAlign.Center,
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { SessionController.audioCommand("play") },
-                    enabled = !audio.playing,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                ) { Text("Tocar") }
-                Button(
-                    onClick = { SessionController.audioCommand("pause") },
-                    enabled = audio.playing,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                ) { Text("Pausar") }
+                TransportButton(Glyph.PLAY, "Tocar", { SessionController.audioCommand("play") }, Modifier.weight(1f), enabled = !audio.playing, primary = true)
+                TransportButton(Glyph.PAUSE, "Pausar", { SessionController.audioCommand("pause") }, Modifier.weight(1f), enabled = audio.playing)
+                TransportButton(Glyph.STOP, "Parar e voltar ao início", { SessionController.audioCommand("stop") }, Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(
-                    onClick = { SessionController.audioSeekBy(0.0, toStart = true) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Início") }
-                FilledTonalButton(
-                    onClick = { SessionController.audioSeekBy(-10_000.0) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("−10 s") }
-                FilledTonalButton(
-                    onClick = { SessionController.audioSeekBy(10_000.0) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("+10 s") }
+                TransportButton(Glyph.TO_START, "Voltar ao início", { SessionController.audioToStart() }, Modifier.weight(1f))
+                TransportButton(Glyph.BACK, "Voltar 10 segundos", { SessionController.audioSeekBy(-10_000.0) }, Modifier.weight(1f), label = "10")
+                TransportButton(Glyph.FORWARD, "Avançar 10 segundos", { SessionController.audioSeekBy(10_000.0) }, Modifier.weight(1f), label = "10")
             }
             if (audio.deviceCount > audio.readyCount) {
                 Text(
@@ -961,5 +896,143 @@ private fun SyncQualityBlock(ui: UiState) {
                 )
             }
         }
+    }
+}
+
+/** Tela do cliente: só o básico. Sem controle nenhum do metrônomo ou do áudio: apenas acompanha. */
+@Composable
+private fun GuestScreen(ui: UiState) {
+    val context = LocalContext.current
+    var beatInfo by remember { mutableStateOf<BeatInfo?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            beatInfo = SessionController.beatInfo()
+            delay(20)
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        StatusModule(ui)
+        MetronomeViewModule(ui, beatInfo)
+        AudioViewModule(ui)
+        Module("Autocalibração", if (ui.autoCalibrated) String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) else "não calibrado") {
+            CalibrationSection(ui, ui.metronome.playing, groupCalibration = false)
+        }
+        NicknameModule()
+        ui.message?.let { Text(it, color = Pal.Bad, style = MaterialTheme.typography.bodySmall) }
+        OutlinedButton(
+            onClick = { SessionController.leave(context) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Sair da sessão", color = Pal.Bad) }
+    }
+}
+
+/** Só mostra: bolinhas dos tempos, andamento e contagem. Nenhum botão. */
+@Composable
+private fun MetronomeViewModule(ui: UiState, info: BeatInfo?) {
+    val state = ui.metronome
+    Module("Metrônomo", info?.let { if (it.beat == 0) "começa em ${ceil(it.countdownMs / 1000.0).toInt()}" else "${it.beat} / ${state.beatsPerBar}" }) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            for (i in 1..state.beatsPerBar.coerceAtMost(12)) {
+                val active = info != null && info.beat == i
+                Box(
+                    Modifier
+                        .padding(horizontal = 5.dp)
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(if (active) Pal.Ink else Pal.Recessed),
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
+            Text("${state.bpm.roundToInt()}", fontSize = 72.sp, fontWeight = FontWeight.Light, style = TabularStyle.copy(fontSize = 72.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp))
+            Text("  BPM", style = LabelStyle, modifier = Modifier.padding(bottom = 14.dp))
+        }
+        Text(
+            if (state.playing) "Tocando" else "Parado",
+            style = MaterialTheme.typography.bodySmall,
+            color = Pal.Graphite,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Só mostra: nome do arquivo, preparo, barra de progresso e tempo. Nenhum botão. */
+@Composable
+private fun AudioViewModule(ui: UiState) {
+    val audio by SessionController.audio.collectAsState()
+    var position by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            position = SessionController.audioPositionMs()
+            delay(100)
+        }
+    }
+    Module("Áudio", ui.groupName) {
+        if (!audio.supported) {
+            Text("O anfitrião desta sessão não oferece áudio sincronizado.", style = MaterialTheme.typography.bodySmall)
+        } else if (audio.fileName.isBlank()) {
+            Text("Aguardando o anfitrião escolher um arquivo.", style = MaterialTheme.typography.bodySmall)
+        } else {
+            Text(audio.fileName, fontWeight = FontWeight.Bold)
+            if (!audio.ready) Text(audio.status, style = MaterialTheme.typography.bodySmall)
+            val p = position
+            val d = audio.durationMs
+            LinearProgressIndicator(
+                progress = { if (p != null && d > 0) (p / d).toFloat().coerceIn(0f, 1f) else 0f },
+                modifier = Modifier.fillMaxWidth(),
+                color = Pal.Ink,
+                trackColor = Pal.Recessed,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(if (p == null) "—" else formatTime(p), style = TabularStyle)
+                Text(if (audio.playing) "Tocando" else "Parado", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+                Text(if (d > 0) formatTime(d) else "", style = TabularStyle)
+            }
+        }
+    }
+}
+
+/** O cliente dá um apelido ao próprio aparelho; o anfitrião o vê nas listas de aparelhos e grupos. */
+@Composable
+private fun NicknameModule() {
+    val context = LocalContext.current
+    var text by remember { mutableStateOf(SessionController.nickname(context)) }
+    var saved by remember { mutableStateOf(false) }
+    Module("Nome deste aparelho") {
+        Text(
+            "O anfitrião vê este nome na lista de aparelhos e grupos.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Pal.Graphite,
+        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = {
+                    text = it.take(24)
+                    saved = false
+                },
+                placeholder = { Text("Ex.: Violino da Ana") },
+                singleLine = true,
+                colors = fieldColors(),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = {
+                    SessionController.setNickname(context, text)
+                    saved = true
+                },
+                enabled = text.trim() != SessionController.nickname(context),
+                modifier = Modifier.height(56.dp),
+            ) { Text("Salvar") }
+        }
+        if (saved) Text("Salvo. O anfitrião verá o novo nome em instantes.", style = MaterialTheme.typography.bodySmall)
     }
 }

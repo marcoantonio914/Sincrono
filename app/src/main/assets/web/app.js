@@ -221,7 +221,6 @@ showOffset();
 
 document.querySelector('#play').addEventListener('click', () => command('play'));
 document.querySelector('#pause').addEventListener('click', () => command('pause'));
-document.querySelector('#restart').addEventListener('click', () => command('restart'));
 
 connectEvents();
 // Rajada inicial de amostras para convergir rápido; depois, a cada 2 s.
@@ -245,7 +244,10 @@ if (!deviceId) {
     : `web-${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
   try { localStorage.setItem('metronomo.deviceId', deviceId); } catch { /* sem armazenamento */ }
 }
-const deviceName = `Computador (${(navigator.platform || 'navegador').trim()}) ${deviceId.slice(0, 4)}`;
+const defaultDeviceName = `Computador (${(navigator.platform || 'navegador').trim()}) ${deviceId.slice(0, 4)}`;
+// Apelido escolhido pelo usuário desta página (o anfitrião o vê nas listas de aparelhos e grupos).
+let deviceName = defaultDeviceName;
+try { const saved = (localStorage.getItem('sincrono.nickname') || '').trim(); if (saved) deviceName = saved; } catch { /* sem armazenamento */ }
 
 let calibSupported = true;
 let calibFirst = true;
@@ -663,6 +665,7 @@ function initSong() {
   });
   document.querySelector('#song-play').addEventListener('click', () => songCommand('play'));
   document.querySelector('#song-pause').addEventListener('click', () => songCommand('pause'));
+  document.querySelector('#song-stop').addEventListener('click', () => songCommand('stop'));
   document.querySelector('#song-start').addEventListener('click', () => songCommand('seek', 0));
   document.querySelector('#song-back').addEventListener('click', () => songSeekBy(-10000));
   document.querySelector('#song-forward').addEventListener('click', () => songSeekBy(10000));

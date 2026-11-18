@@ -14,7 +14,7 @@ button { background: var(--recessed); cursor: pointer; }
 button:active { background: var(--ink); color: #fff; }
 #play { background: var(--ink); color: #fff; }
 .controls { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); }
-section.controls { grid-template-columns: 2fr 1fr 1fr; }
+section.controls { grid-template-columns: 2fr 1fr; }
 #beat { min-height: 3.5rem; margin: 0; font-size: 3.5rem; font-weight: 300; letter-spacing: -.03em; text-align: center; font-variant-numeric: tabular-nums; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .offset { background: var(--surface); border: 1px solid var(--recessed); border-radius: 8px; padding: 16px; }
@@ -63,3 +63,12 @@ button.big { min-height: 56px; font-size: 1.05rem; }
 #host-calib[hidden], #leave-session[hidden], #calib-advanced[hidden] { display: none !important; }
 #host-calib details { margin-top: 8px; }
 #calib-start-msg { font-weight: 600; }
+
+/* Ícones de transporte e visão do cliente (só o anfitrião tem todos os controles). */
+.ico { width: 1.5em; height: 1.5em; fill: currentColor; vertical-align: middle; pointer-events: none; }
+.guest-only { display: none; }
+.guest .guest-only { display: block; }
+.guest .host-only { display: none !important; }
+.row .primary .ico, .controls .primary .ico { fill: #fff; }
+.row.icons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.row.icons button { margin: 0; width: 100%; }

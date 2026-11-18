@@ -28,7 +28,7 @@ class CalibrationManager(
     private val clock: ClockSync,
     private val scope: CoroutineScope,
     private val deviceId: String,
-    private val deviceName: String,
+    private val deviceName: () -> String,
     /** Este aparelho é o anfitrião da sessão (a referência de todas as calibrações). */
     private val isHost: Boolean,
     /** Diz se este aparelho pode gravar (permissão de microfone concedida). */
@@ -169,7 +169,7 @@ class CalibrationManager(
                 val host = if (isHost) 1 else 0
                 val cal = if (calibrated()) 1 else 0
                 val auto = String.format(Locale.ROOT, "%.3f", autoOffset())
-                val path = "/api/calib?device=${enc(deviceId)}&name=${enc(deviceName)}&rec=$rec" +
+                val path = "/api/calib?device=${enc(deviceId)}&name=${enc(deviceName())}&rec=$rec" +
                     "&host=$host&auto=$auto&cal=$cal&route=${enc(routeName())}"
                 val (code, text) = request("GET", path, null)
                 if (code == 404) {

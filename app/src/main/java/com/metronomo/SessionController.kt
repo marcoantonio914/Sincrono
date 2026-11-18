@@ -56,6 +56,7 @@ object SessionController {
     private const val PREFS = "metronomo"
     private const val KEY_OFFSET = "offsetMs" // ajuste manual da versão antiga (usado só como valor inicial)
     private const val KEY_DEVICE_ID = "deviceId"
+    private const val KEY_NICKNAME = "nickname" // apelido deste aparelho, mostrado ao anfitrião
     private const val KEY_OWN_VOLUME = "ownVolume"
     private const val KEY_GROUPS = "groupsState"
     private const val KEY_MIX_LEVELS = "mixLevels" // níveis por aparelho definidos por este aparelho quando é anfitrião
@@ -265,11 +266,11 @@ object SessionController {
      * anfitrião ou contra um aparelho que já está calibrado. Com [cable], o som vai por cabo a uma
      * mesa de som que o soma, e só este aparelho grava (pela entrada ligada à saída da mesa).
      */
-    fun startCalibration(partnerId: String? = null, cable: Boolean = false) {
+    fun startCalibration(partnerId: String? = null) {
         val cm = calibrationManager ?: return
         _calibration.update { it.copy(status = "Iniciando…", lines = emptyList()) }
         scope?.launch {
-            val error = cm.requestStart(partnerId, cable)
+            val error = cm.requestStart(partnerId, false)
             if (error != null) _calibration.update { it.copy(running = false, status = error) }
         }
     }
@@ -502,6 +503,20 @@ object SessionController {
         }
     }
 
+    /** Apelido deste aparelho (vazio = usa o modelo). É o nome que o anfitrião vê nas listas. */
+    fun nickname(context: Context): String =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_NICKNAME, "").orEmpty()
+
+    fun setNickname(context: Context, value: String) {
+        val clean = value.trim().replace(Regex("\\s+"), " ").take(24)
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_NICKNAME, clean).apply()
+        // O nome novo vai ao anfitrião na próxima consulta da calibração (poucos segundos).
+    }
+
+    /** Nome enviado ao anfitrião: o apelido, ou o modelo do aparelho se não houver apelido. */
+    private fun deviceDisplayName(context: Context): String =
+        nickname(context).ifBlank { "${Build.MODEL} (${deviceIdInUse.take(4)})" }
+
     /** Pula [deltaMs] a partir da posição atual (negativo volta); [toStart] volta ao início. */
     fun audioSeekBy(deltaMs: Double, toStart: Boolean = false) {
         val pb = audioPlayback ?: return
@@ -511,6 +526,15 @@ object SessionController {
         }
         scope?.launch {
             val error = pb.command("seek", target)
+            _ui.update { it.copy(message = error) }
+        }
+    }
+
+    /** Volta ao início (e continua tocando, se estiver tocando) no grupo indicado, ou em TODOS com "all", no mesmo instante. */
+    fun audioToStart(targetGroup: String? = null) {
+        val pb = audioPlayback ?: return
+        scope?.launch {
+            val error = pb.command("seek", 0.0, targetGroup)
             _ui.update { it.copy(message = error) }
         }
     }
@@ -628,7 +652,7 @@ object SessionController {
             clock = ck,
             scope = sc,
             deviceId = deviceId,
-            deviceName = "${Build.MODEL} (${deviceId.take(4)})",
+            deviceName = { deviceDisplayName(app) },
             isHost = role == Role.HOST,
             canRecord = {
                 ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED

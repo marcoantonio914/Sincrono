@@ -34,6 +34,9 @@ class AudioHub(private val nowMs: () -> Double) {
     private var positionMs = 0.0
     private var stopAt = Double.NaN
 
+    /** A parada agendada em [stopAt] é um "parar" (volta ao início), não uma pausa. */
+    private var resetOnStop = false
+
     /**
      * Chamado (fora do lock) com o estado completo em JSON sempre que um comando ou arquivo novo
      * muda o estado; o servidor o envia aos ouvintes de /events/audio. O polling continua como recuperação.
@@ -56,6 +59,7 @@ class AudioHub(private val nowMs: () -> Double) {
             playing = false
             positionMs = 0.0
             stopAt = Double.NaN
+            resetOnStop = false
             revision++
             if (old != null) runCatching { old.path.delete() }
             newId
@@ -71,6 +75,7 @@ class AudioHub(private val nowMs: () -> Double) {
             playing = false
             positionMs = 0.0
             stopAt = Double.NaN
+            resetOnStop = false
             revision++
         }
         onChange?.invoke(snapshotJson())
@@ -122,9 +127,10 @@ class AudioHub(private val nowMs: () -> Double) {
     /** Depois que a parada agendada passou, consolida a posição e marca como parado. */
     private fun normalize() {
         if (playing && !stopAt.isNaN() && nowMs() > stopAt + 300) {
-            positionMs += maxOf(0.0, stopAt - startAt)
+            positionMs = if (resetOnStop) 0.0 else positionMs + maxOf(0.0, stopAt - startAt)
             playing = false
             stopAt = Double.NaN
+            resetOnStop = false
             revision++
         }
     }
@@ -132,7 +138,7 @@ class AudioHub(private val nowMs: () -> Double) {
     private fun positionAt(t: Double): Double = when {
         !playing -> positionMs
         t <= startAt -> positionMs
-        !stopAt.isNaN() && t >= stopAt -> positionMs + maxOf(0.0, stopAt - startAt)
+        !stopAt.isNaN() && t >= stopAt -> if (resetOnStop) 0.0 else positionMs + maxOf(0.0, stopAt - startAt)
         else -> positionMs + (t - startAt)
     }
 
@@ -148,6 +154,7 @@ class AudioHub(private val nowMs: () -> Double) {
                     startAt = now + LEAD_MS
                     positionMs = from.coerceAtLeast(0.0)
                     stopAt = Double.NaN
+                    resetOnStop = false
                     playing = true
                     revision++
                 }
@@ -166,6 +173,7 @@ class AudioHub(private val nowMs: () -> Double) {
 
             "seek" -> {
                 val target = (if (requested.isNaN()) 0.0 else requested).coerceAtLeast(0.0)
+                resetOnStop = false
                 if (playing) {
                     startAt = now + LEAD_MS
                     positionMs = target
@@ -177,9 +185,20 @@ class AudioHub(private val nowMs: () -> Double) {
             }
 
             "stop" -> {
-                playing = false
-                positionMs = 0.0
-                stopAt = Double.NaN
+                // Parar = pausar num instante combinado (todos param juntos, com fade) e voltar ao início.
+                if (playing && stopAt.isNaN()) {
+                    if (now < startAt) {
+                        playing = false // ainda nem começou: só cancela
+                        positionMs = 0.0
+                    } else {
+                        stopAt = now + STOP_MS
+                        resetOnStop = true
+                    }
+                } else if (playing) {
+                    resetOnStop = true // já havia uma pausa agendada: vira parada
+                } else {
+                    positionMs = 0.0
+                }
                 revision++
             }
 
@@ -206,6 +225,7 @@ class AudioHub(private val nowMs: () -> Double) {
             .put("startAt", startAt.toLong())
             .put("positionMs", positionMs)
             .put("stopAt", if (stopAt.isNaN()) JSONObject.NULL else stopAt.toLong())
+            .put("resetOnStop", resetOnStop)
             .put("ready", ready)
             .put("devices", live.size)
             .toString()
