@@ -72,3 +72,12 @@ button.big { min-height: 56px; font-size: 1.05rem; }
 .row .primary .ico, .controls .primary .ico { fill: #fff; }
 .row.icons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .row.icons button { margin: 0; width: 100%; }
+
+/* Partitura */
+#score-view { height: 260px; overflow: auto; background: #fff; color: #111; border: 1px solid var(--recessed); border-radius: 6px; position: relative; }
+#score-view.pages { height: 56vh; }
+#score[hidden] { display: none !important; }
+#score-part { min-width: 0; }
+#score .row button { min-height: 40px; padding: 4px 10px; }
+#score-groups .row span { min-width: 90px; }
+@media (min-width: 900px) { body.has-score main { width: min(100%, 960px); } }

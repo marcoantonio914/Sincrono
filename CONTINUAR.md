@@ -15,6 +15,20 @@ App Android nativo (Kotlin/Compose) de **metrônomo e áudio sincronizados entre
 
 Ideia central: **nada é transmitido ao vivo.** O anfitrião só manda comandos ("comece em tal instante do relógio do servidor"). Cada aparelho baixa o arquivo inteiro uma vez e o toca localmente, calculando a posição pelo relógio compartilhado (sincronia estilo NTP, erro ~1–2 ms). Rede lenta não faz falha de som. O que sobra é a **latência de saída de áudio de cada aparelho**, resolvida pela calibração.
 
+## 3a. v13 — PARTITURA NA TELA (em andamento; leia isto antes da seção 3)
+
+Pedido do usuário: partitura escrita no MuseScore e exportada em **MusicXML**; cada músico vê **só a sua parte**; o **cursor segue o metrônomo** (e o áudio exportado do MuseScore); a partitura pode ter repetições, mudanças de andamento, "de tudo". Decisão de projeto: **motor próprio, sem bibliotecas externas** (funciona offline na WebView; OSMD/Verovio não puderam ser baixados). Uma **única partitura por sessão** (arquivo completo, todas as partes); **cada grupo escolhe qual parte vê** e cada músico pode trocar a sua no próprio aparelho.
+
+| Etapa | Situação |
+|---|---|
+| Leitor MusicXML/MXL `web/score.js` (partes, ordem real de execução com repetições/casas/da capo/segno/coda/fine, mapa de andamento, `locate(ms)`) | **FEITO e testado** (`python3 tools/teste_partitura_leitor.py`, 10 verificações em Chromium) |
+| Desenho SVG + cursor `web/score-view.js` (`SincronoScore.ScoreView`): claves G/F/C, armadura, fórmula, notas/acordes/pausas, hastes, barras, bandeirolas, ligaduras, tercinas (só o número), letra, dinâmicas, andamento, repetições e casas, piano em 2 pautas; modos "uma linha rolando" e "páginas"; rolagem acompanha o cursor e pausa 4 s quando o usuário mexe | **FEITO e testado** (`tools/teste_partitura_desenho.py`, 20 verificações; capturas olhadas à mão com `tools/captura_partitura.py`). **Não desenha:** notas de adorno, 8va, pedal, crescendo (vira o texto "cresc."), vários versos de letra, vozes cruzadas complexas. A clave de sol é um desenho aproximado. Só foi testado com partituras de exemplo geradas por `tools/gerar_exemplos_partitura.py` — **falta testar com partituras reais do MuseScore do usuário.** |
+| Servidor do PC: `/api/score`, `/api/score/file?id=`, `POST /api/score/upload?name=`, `/api/score/clear`, `/api/score/part {group, part}` | **FEITO e testado** (`servidor-pc/teste_partitura.py`, 15 verificações) |
+| Página (anfitrião e cliente) `web/score-panel.js` + seção `#score` em `index.html`: importar, escolher parte por grupo, "minha parte", modo, zoom, botão "Metrônomo = partitura", cursor | **FEITO e testado** (`tools/teste_partitura_pagina.py`: servidor real + Chromium, 13 verificações, inclui o cursor voltando ao compasso 1 depois da repetição) |
+| Anfitrião Android (Kotlin): mesmos endpoints em `SessionServer.kt` + tela para importar no app | **A FAZER (parte 2).** Enquanto isso, no celular anfitrião a página simplesmente esconde o painel (o endpoint responde 404). |
+
+**Cursor:** prioridade áudio tocando > metrônomo > áudio pausado > início. Com o metrônomo, o tempo da partitura = `(agora − startAt) × (bpm da sessão ÷ bpm inicial da partitura)`; ou seja, o metrônomo marca um andamento fixo e o cursor segue o mapa de andamento da partitura nesse ritmo (mudança de andamento no meio não muda o metrônomo). Com áudio exportado do MuseScore o tempo coincide, sem marcações. **Áudio gravado por pessoas (andamento livre) precisa de marcadores compasso→segundo: NÃO feito (v14).**
+
 ## 3. Estado atual (v12) — o que foi pedido, feito e verificado
 
 Pedidos do usuário na v12 e situação:
@@ -96,7 +110,7 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
 2. Testar em aparelhos: tocar/pausar/parar com 2+ aparelhos e 2+ grupos; apelido aparecendo no anfitrião; tela do cliente.
 3. Correção da autocalibração com o carimbo mais próximo de cada som (ver seção 6) e comparação com o OboeTester (`Round Trip Latency`) no mesmo aparelho.
-4. **Partitura na tela** (viabilidade em `docs/PARTITURA.md`): formato recomendado MusicXML/MuseScore (não PDF), renderizado por OpenSheetMusicDisplay ou Verovio numa WebView, com cursor guiado pelo relógio compartilhado. Começar por uma prova de conceito num único aparelho.
+4. **Partitura na tela — v13 em andamento (ver 3a)**; histórico da decisão em `docs/PARTITURA.md`: formato recomendado MusicXML/MuseScore (não PDF), renderizado por OpenSheetMusicDisplay ou Verovio numa WebView, com cursor guiado pelo relógio compartilhado. Começar por uma prova de conceito num único aparelho.
 5. Decidir o destino do código legado de cabo (`CalibrationHub` modo cabo, `calibracao_cabo.py`): remover de vez, trocando o registro de aparelhos do servidor do PC.
 6. Medir o servidor no celular anfitrião real com `servidor-pc/simulador.py --host IP:3000`.
 
@@ -107,3 +121,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v10: página única no PC ("Ser anfitrião / Entrar"), calibração por soma com um botão, repositório git.
 - v11: **autocalibração** (loopback com carimbo do microfone), anfitrião autocalibrável. Validada pelo usuário em aparelhos reais.
 - v12: **parar** agendado e transporte com ícones, tela simples do cliente, apelido do aparelho, renomear grupos, cabo retirado da interface, este documento, estudo da partitura.
+- v13 (parte 1): partitura na tela — leitor MusicXML, desenho SVG com cursor, servidor do PC e página (anfitrião/cliente). Parte 2: anfitrião Android.

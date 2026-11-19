@@ -44,6 +44,27 @@
         <button id="sound-enable" type="button" class="primary">Ativar som neste aparelho</button>
       </section>
       <div class="tab" data-tab="sync">
+      <section id="score" class="offset" aria-label="Partitura" hidden>
+        <h2>Partitura</h2>
+        <div class="row">
+          <select id="score-part" class="grow" aria-label="Minha parte"></select>
+          <button id="score-mode" type="button" title="Alternar entre uma linha rolando e páginas">Páginas</button>
+          <button id="score-zoom-out" type="button" aria-label="Diminuir" title="Diminuir">A−</button>
+          <button id="score-zoom-in" type="button" aria-label="Aumentar" title="Aumentar">A+</button>
+        </div>
+        <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
+        <p id="score-info" class="muted" aria-live="polite"></p>
+        <div class="host-only">
+          <div class="row">
+            <input id="score-file" type="file" accept=".musicxml,.xml,.mxl" class="grow" aria-label="Importar partitura (MusicXML)">
+            <button id="score-tempo" type="button" title="Ajusta o metrônomo ao andamento da partitura">Metrônomo = partitura</button>
+            <button id="score-remove" type="button" class="danger">Remover</button>
+          </div>
+          <p class="hint">No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Cada grupo vê a parte que você escolher abaixo.</p>
+          <div id="score-groups"></div>
+        </div>
+        <p id="score-msg" class="hint" aria-live="polite"></p>
+      </section>
       <section class="fields host-only" aria-label="Configurações">
         <label>BPM <input id="bpm" type="number" min="30" max="300" value="120" inputmode="numeric"></label>
         <label>Tempos <input id="beats" type="number" min="1" max="12" value="4" inputmode="numeric"></label>
@@ -152,5 +173,8 @@
     <script src="/qr.js"></script>
     <script src="/app.js"></script>
     <script src="/host.js"></script>
+    <script src="/score.js"></script>
+    <script src="/score-view.js"></script>
+    <script src="/score-panel.js"></script>
   </body>
 </html>

@@ -47,6 +47,7 @@ PEER_TTL_MS = 6000.0
 MAX_GROUPS = 16
 DEFAULT_GROUP = "g1"
 MAX_UPLOAD = 300_000_000
+MAX_SCORE = 30_000_000   # partituras (MusicXML/MXL) são pequenas
 
 _EPOCH_MS = time.time() * 1000.0
 _T0 = time.perf_counter()
@@ -242,6 +243,10 @@ class Session:
         self.hubs = {}
         self.mix = {}
         self.mix_rev = 1
+        self.score = None                # partitura da sessão: dict(id, name, path, size)
+        self.score_next = 1
+        self.score_rev = 1
+        self.score_parts = {}            # grupo -> índice da parte que o grupo vê
         self.devices = {}                # id -> dict(name, seen)
 
     # ---- metrônomo
@@ -293,6 +298,56 @@ class Session:
         for q in clients:
             q.put(f"event: audio\ndata: {snap}\n\n")
 
+    # ---- partitura (uma por sessão; cada grupo escolhe a sua parte)
+    def score_json(self):
+        with self.lock:
+            f = self.score
+            return {"rev": self.score_rev,
+                    "file": None if f is None else {"id": f["id"], "name": f["name"], "size": f["size"]},
+                    "parts": dict(self.score_parts)}
+
+    def score_set(self, path, name, size):
+        with self.lock:
+            old = self.score
+            self.score = dict(id=self.score_next, name=name, path=path, size=size)
+            self.score_next += 1
+            self.score_parts = {}
+            self.score_rev += 1
+        if old:
+            try:
+                os.remove(old["path"])
+            except OSError:
+                pass
+
+    def score_clear(self):
+        with self.lock:
+            old, self.score = self.score, None
+            self.score_parts = {}
+            self.score_rev += 1
+        if old:
+            try:
+                os.remove(old["path"])
+            except OSError:
+                pass
+
+    def score_part(self, gid, part):
+        with self.lock:
+            if gid not in self.group_names or self.score is None:
+                return False
+            try:
+                part = int(part)
+            except (TypeError, ValueError):
+                return False
+            if not 0 <= part < 64:
+                return False
+            self.score_parts[gid] = part
+            self.score_rev += 1
+        return True
+
+    def score_file(self, fid):
+        with self.lock:
+            return self.score if self.score and self.score["id"] == fid else None
+
     def groups_json(self):
         with self.lock:
             groups = []
@@ -322,6 +377,7 @@ class Session:
                 if gid == DEFAULT_GROUP or gid not in self.group_names:
                     return False
                 del self.group_names[gid]
+                self.score_parts.pop(gid, None)
                 self.assign = {d: g for d, g in self.assign.items() if g != gid}
                 h = self.hubs.pop(gid, None)
                 if h:
@@ -533,6 +589,17 @@ class Handler(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
             return
+        if path == "/api/score":
+            return self._json(200, s.score_json())
+        if path == "/api/score/file":
+            try:
+                fid = int(q.get("id", ""))
+            except ValueError:
+                fid = -1
+            info = s.score_file(fid)
+            if not info or not os.path.isfile(info["path"]):
+                return self._json(404, {"error": "Não encontrado."})
+            return self._file(info["path"], "application/octet-stream")
         if path == "/api/mix":
             return self._json(200, s.mix_json())
         if path == "/api/groups":
@@ -576,6 +643,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, '{"clientSentAt":%d,"serverReceivedAt":%.3f,"serverSentAt":%.3f}' % (client_sent, t_recv, sent))
         if path == "/api/audio/upload":
             return self._upload(q)
+        if path == "/api/score/upload":
+            return self._upload_score(q)
         body = self._body_json()
         if body is None or not isinstance(body, dict):
             return self._json(400, {"error": "JSON inválido."})
@@ -584,6 +653,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(404, {"error": "Este servidor não oferece calibração automática (falta numpy)."})
             status, reply = CABLE.handle("POST", path, q, body, local=self._is_local())
             return self._json(status, reply)
+        if path == "/api/score/clear":
+            s.score_clear()
+            return self._json(200, s.score_json())
+        if path == "/api/score/part":
+            if not s.score_part(body.get("group"), body.get("part")):
+                return self._json(400, {"error": "Grupo ou parte inválidos (importe a partitura antes)."})
+            return self._json(200, s.score_json())
         if path == "/api/command":
             status, reply = s.command(body)
             return self._json(status, reply)
@@ -633,6 +709,30 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "Envio interrompido."})
         h.set_file(str(target), name, self.headers.get("X-File-Type", "application/octet-stream"), n)
         return self._json(200, s.groups_json())
+
+    def _upload_score(self, q):
+        s = SESSION
+        name = re.sub(r"[\x00-\x1f/\\]", "", q.get("name", "partitura")).strip()[:120] or "partitura"
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n <= 0 or n > MAX_SCORE:
+            return self._json(400, {"error": "Arquivo vazio ou grande demais (máximo %d MB)." % (MAX_SCORE // 1_000_000)})
+        target = s.cache_dir / ("score-%d.bin" % int(time.time() * 1000))
+        left = n
+        with open(target, "wb") as f:
+            while left > 0:
+                chunk = self.rfile.read(min(65536, left))
+                if not chunk:
+                    break
+                f.write(chunk)
+                left -= len(chunk)
+        if left > 0:
+            os.remove(target)
+            return self._json(400, {"error": "Envio interrompido."})
+        s.score_set(str(target), name, n)
+        return self._json(200, s.score_json())
 
     def _file(self, path, ctype):
         try:
