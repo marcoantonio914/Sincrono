@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/style.css">
+    <title>Sincrono - Partitura</title>
+    <style>
+      body { padding-bottom: 8px; background: transparent; min-height: 0; }
+      main { width: 100%; padding: 0; }
+      #score { border: 0; padding: 0; background: transparent; }
+      #score h2 { display: none; }
+      #score-view { height: 46vh; }
+      #score-view.pages { height: 70vh; }
+      body.native-host #score-file { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="tab" data-tab="score">
+      <section id="score" class="offset" aria-label="Partitura" hidden>
+        <h2>Partitura</h2>
+        <div class="row">
+          <select id="score-part" class="grow" aria-label="Minha parte"></select>
+          <button id="score-mode" type="button" title="Alternar entre uma linha rolando e páginas">Páginas</button>
+          <button id="score-zoom-out" type="button" aria-label="Diminuir" title="Diminuir">A−</button>
+          <button id="score-zoom-in" type="button" aria-label="Aumentar" title="Aumentar">A+</button>
+        </div>
+        <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
+        <p id="score-info" class="muted" aria-live="polite"></p>
+        <div class="host-only">
+          <div class="row">
+            <input id="score-file" type="file" accept=".musicxml,.xml,.mxl" class="grow" aria-label="Importar partitura (MusicXML)">
+            <button id="score-tempo" type="button" title="Ajusta o metrônomo ao andamento da partitura">Metrônomo = partitura</button>
+            <button id="score-remove" type="button" class="danger">Remover</button>
+          </div>
+          <p class="hint">No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Cada grupo vê a parte que você escolher abaixo.</p>
+          <div id="score-groups"></div>
+        </div>
+        <p id="score-msg" class="hint" aria-live="polite"></p>
+      </section>
+      </div>
+    </main>
+    <!-- No app, o relógio, o metrônomo e o áudio são nativos: o app empurra os valores (sincronoTick) a cada 50 ms. -->
+    <script>
+      let songGroup = 'g1';
+      let songState = null;
+      let state = { playing: false, bpm: 120, beatsPerBar: 4, startAt: 1, revision: 0 };
+      let nativeElapsed = 0, nativeAudio = null;
+      function serverNow() { return nativeElapsed + 1; }
+      function songPositionMs() { return nativeAudio === null ? 0 : nativeAudio; }
+      window.sincronoTick = function (t) {
+        if (!t) return;
+        songGroup = t.group || 'g1';
+        nativeAudio = (typeof t.audio === 'number') ? t.audio : null;
+        songState = nativeAudio === null ? null : { file: { id: 1 }, playing: !!t.audioPlaying, positionMs: nativeAudio, startAt: 0, stopAt: null };
+        const metro = (typeof t.metro === 'number');
+        nativeElapsed = metro ? t.metro : 0;
+        state = { playing: metro, bpm: t.bpm || 120, beatsPerBar: 4, startAt: 1, revision: 0 };
+      };
+      const q = new URLSearchParams(location.search);
+      if (q.get('host') === '1') document.body.classList.add('native-host'); else document.body.classList.add('guest');
+    </script>
+    <script src="/score.js"></script>
+    <script src="/score-view.js"></script>
+    <script src="/score-panel.js"></script>
+  </body>
+</html>

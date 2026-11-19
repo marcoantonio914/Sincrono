@@ -8,7 +8,7 @@
   const box = $('score-view');
   const sel = $('score-part');
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
-  let groups = [], view = null;
+  let groups = [], view = null, drawnGroup = '';
   let mode = 'continuous', zoom = 1;
   try { mode = localStorage.getItem('sincrono.scoreMode') === 'pages' ? 'pages' : 'continuous'; zoom = Number(localStorage.getItem('sincrono.scoreZoom')) || 1; } catch { /* sem armazenamento */ }
   const isGuest = () => document.body.classList.contains('guest');
@@ -47,6 +47,7 @@
     if (!view) view = new SincronoScore.ScoreView(box, { mode, zoom });
     view.mode = mode; view.zoom = zoom;
     view.setScore(score, partIndex());
+    drawnGroup = myGroup();
     last = '';
   }
 
@@ -130,6 +131,7 @@
   }
   setInterval(() => {
     if (!score || !view || sec.hidden) return;
+    if (myGroup() !== drawnGroup) { renderSelect(); draw(); }   // o anfitrião moveu este aparelho de grupo
     const loc = score.locate(scoreMs());
     if (loc.k === undefined) return;
     const key = loc.k + ':' + loc.q.toFixed(2);

@@ -53,6 +53,7 @@ object SessionController {
 
     const val DEFAULT_PORT = 3000
     private const val MAX_AUDIO_BYTES = 200_000_000L
+    private const val MAX_SCORE_BYTES = 30_000_000
     private const val PREFS = "metronomo"
     private const val KEY_OFFSET = "offsetMs" // ajuste manual da versão antiga (usado só como valor inicial)
     private const val KEY_DEVICE_ID = "deviceId"
@@ -106,6 +107,8 @@ object SessionController {
         /** Grupo ("ilha") a que este aparelho pertence e o nome dele. */
         val groupId: String = "g1",
         val groupName: String = "Geral",
+        /** Endereço do servidor da sessão (no anfitrião, 127.0.0.1); a tela de partitura abre páginas dele. */
+        val baseUrl: String = "",
     )
 
     /** [beat] é 1-based; 0 significa contagem regressiva antes do início. */
@@ -579,6 +582,57 @@ object SessionController {
         }
     }
 
+    /**
+     * Anfitrião: importa a partitura (MusicXML/MXL) escolhida no seletor de arquivos e a oferece a todos.
+     * O arquivo fica na memória do servidor; os aparelhos baixam por /api/score/file.
+     */
+    fun importScore(context: Context, uri: Uri) {
+        val srv = server ?: return
+        val app = context.applicationContext
+        scope?.launch(Dispatchers.IO) {
+            try {
+                var name = "partitura"
+                app.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    if (c.moveToFirst()) {
+                        val n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (n >= 0) name = c.getString(n) ?: name
+                    }
+                }
+                val bytes = app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IOException("Não foi possível abrir o arquivo.")
+                if (bytes.isEmpty() || bytes.size > MAX_SCORE_BYTES) {
+                    _ui.update { it.copy(message = "Partitura vazia ou grande demais (máximo ${MAX_SCORE_BYTES / 1_000_000} MB).") }
+                    return@launch
+                }
+                srv.setScore(bytes, name)
+                _ui.update { it.copy(message = null) }
+            } catch (e: Exception) {
+                _ui.update { it.copy(message = "Não foi possível ler a partitura: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Valores do relógio para o cursor da partitura (JSON entregue à WebView a cada 50 ms):
+     * "metro" = ms desde o início do metrônomo (negativo na contagem; null se parado),
+     * "audio" = posição do áudio sincronizado (null se não há arquivo), "bpm" e o grupo deste aparelho.
+     */
+    fun scoreTick(): String {
+        val ck = clock ?: return "null"
+        val ui = _ui.value
+        val s = ui.metronome
+        val start = s.startAt
+        val metro: Any = if (s.playing && start != null) ck.nowServerMs() - start else JSONObject.NULL
+        val pos: Any = audioPlayback?.positionMs() ?: JSONObject.NULL
+        return JSONObject()
+            .put("group", ui.groupId)
+            .put("bpm", s.bpm)
+            .put("metro", metro)
+            .put("audio", pos)
+            .put("audioPlaying", _audio.value.playing)
+            .toString()
+    }
+
     fun beatInfo(): BeatInfo? {
         val s = _ui.value.metronome
         val ck = clock ?: return null
@@ -612,7 +666,7 @@ object SessionController {
         engine = en
         audioPlayer = ap
         client = cl
-        _ui.value = UiState(active = true, role = role, hostUrls = hostUrls)
+        _ui.value = UiState(active = true, role = role, hostUrls = hostUrls, baseUrl = url)
         val deviceId = prefs.getString(KEY_DEVICE_ID, null)
             ?: UUID.randomUUID().toString().also { prefs.edit().putString(KEY_DEVICE_ID, it).apply() }
         appContext = app

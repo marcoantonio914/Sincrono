@@ -93,7 +93,7 @@ fun MetronomoApp() {
     }
 }
 
-private val TAB_NAMES = listOf("SYNC", "ÁUDIO", "MIXER", "REDE")
+private val TAB_NAMES = listOf("SYNC", "ÁUDIO", "MIXER", "REDE", "PARTITURA")
 
 /** Navegação inferior: só texto, o item ativo em tinta escura e com um filete no alto. */
 @Composable
@@ -352,7 +352,8 @@ private fun SessionScreen(ui: UiState, tab: Int) {
             0 -> SyncTab(ui, bpm, beats, beatInfo, { bpm = it }, { beats = it })
             1 -> AudioTab(ui)
             2 -> MixerTab(ui)
-            else -> NetworkTab(ui)
+            3 -> NetworkTab(ui)
+            else -> ScoreTab(ui)
         }
         ui.message?.let { Text(it, color = Pal.Bad, style = MaterialTheme.typography.bodySmall) }
         OutlinedButton(
@@ -920,6 +921,7 @@ private fun GuestScreen(ui: UiState) {
         StatusModule(ui)
         MetronomeViewModule(ui, beatInfo)
         AudioViewModule(ui)
+        ScoreCard(ui)
         Module("Autocalibração", if (ui.autoCalibrated) String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) else "não calibrado") {
             CalibrationSection(ui, ui.metronome.playing, groupCalibration = false)
         }

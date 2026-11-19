@@ -118,6 +118,71 @@ class SessionServer(
     /** Volume de cada aparelho definido pelo anfitrião. */
     val mix = MixLevels()
 
+    // ---- partitura: uma por sessão (MusicXML/MXL completo); cada grupo escolhe a parte que vê.
+    // Fica na memória (é pequena). A página (score.js) lê o arquivo e desenha a parte certa.
+    private val scoreLock = Any()
+    private var scoreBytes: ByteArray? = null
+    private var scoreName = ""
+    private var scoreId = 0L
+    private var scoreRev = 1L
+    private val scoreParts = HashMap<String, Int>()
+
+    fun setScore(bytes: ByteArray, name: String) {
+        synchronized(scoreLock) {
+            scoreBytes = bytes
+            scoreName = name
+            scoreId++
+            scoreParts.clear()
+            scoreRev++
+        }
+    }
+
+    fun clearScore() {
+        synchronized(scoreLock) {
+            scoreBytes = null
+            scoreName = ""
+            scoreParts.clear()
+            scoreRev++
+        }
+    }
+
+    /** {"rev":N,"file":{"id","name","size"}|null,"parts":{"grupo":índice}} */
+    private fun scoreJson(): String = synchronized(scoreLock) {
+        val bytes = scoreBytes
+        val parts = JSONObject()
+        scoreParts.forEach { (k, v) -> parts.put(k, v) }
+        val file: Any = if (bytes == null) JSONObject.NULL else JSONObject().put("id", scoreId).put("name", scoreName).put("size", bytes.size)
+        JSONObject().put("rev", scoreRev).put("file", file).put("parts", parts).toString()
+    }
+
+    private fun handleScorePart(req: Request, out: OutputStream, close: Boolean) {
+        val body = runCatching { JSONObject(req.body) }.getOrNull()
+        val group = body?.optString("group").orEmpty()
+        val part = body?.optInt("part", -1) ?: -1
+        val ok = synchronized(scoreLock) {
+            if (scoreBytes != null && groups.exists(group) && part in 0..63) {
+                scoreParts[group] = part
+                scoreRev++
+                true
+            } else false
+        }
+        if (!ok) return respond(out, 400, "{\"error\":\"Grupo ou parte invalidos (importe a partitura antes).\"}", close)
+        respond(out, 200, scoreJson(), close)
+    }
+
+    private fun serveScoreFile(out: OutputStream, rawPath: String, close: Boolean) {
+        val id = CalibrationHub.parseQuery(rawPath)["id"]?.toLongOrNull()
+        val bytes = synchronized(scoreLock) { if (id != null && id == scoreId) scoreBytes else null }
+        if (bytes == null) return respond(out, 404, "{\"error\":\"Nao encontrado.\"}", close)
+        val head = "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: application/octet-stream\r\n" +
+            "Cache-Control: no-store\r\n" +
+            "Content-Length: ${bytes.size}\r\n" +
+            "Connection: ${if (close) "close" else "keep-alive"}\r\n\r\n"
+        out.write(head.toByteArray(Charsets.ISO_8859_1) + bytes)
+        out.flush()
+    }
+
     var port: Int = 0
         private set
 
@@ -276,6 +341,17 @@ class SessionServer(
 
             req.method == "POST" && path == "/api/groups" -> handleGroups(req, out, close)
 
+            req.method == "GET" && path == "/api/score" -> respond(out, 200, scoreJson(), close)
+
+            req.method == "GET" && path == "/api/score/file" -> serveScoreFile(out, req.path, close)
+
+            req.method == "POST" && path == "/api/score/clear" -> {
+                clearScore()
+                respond(out, 200, scoreJson(), close)
+            }
+
+            req.method == "POST" && path == "/api/score/part" -> handleScorePart(req, out, close)
+
             path.startsWith("/api/audio") -> handleAudio(req, out, close)
 
             req.method == "GET" && path == "/api/mix" -> respond(out, 200, mix.toJson(), close)
@@ -366,6 +442,7 @@ class SessionServer(
                 val id = body.optString("id")
                 val removed = groups.remove(id)
                 if (removed) {
+                    synchronized(scoreLock) { scoreParts.remove(id) }
                     hubs.remove(id)?.let { it.onChange = null; it.clear() }
                     audioSseClients.filter { it.group == id }.forEach {
                         runCatching { it.socket.close() }

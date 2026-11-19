@@ -106,9 +106,11 @@ Botão **"Autocalibrar este aparelho"** na seção de calibração. O aparelho t
 - Calibração por cabo retirada da interface (veja `CONTINUAR.md` sobre o código legado).
 - Testes novos: `servidor-pc/teste_transporte.py`.
 
-## v13: partitura na tela (parte 1: página e servidor do PC)
+## v13: partitura na tela
 
 No MuseScore: Arquivo → Exportar → **MusicXML** (a partitura completa, uma vez só). No Sincrono (computador como anfitrião) abra a seção "Partitura" na aba SYNC, importe o arquivo e escolha **qual parte cada grupo vê**; cada músico pode trocar a sua parte no próprio aparelho. O cursor segue o metrônomo e, se houver áudio tocando (exportado do MuseScore), o áudio. Repetições, casas 1/2, da capo/segno/coda e mudanças de andamento são respeitados.
 
-Testes (precisam de Python + Playwright/Chromium): `python3 tools/teste_partitura_leitor.py`, `python3 tools/teste_partitura_desenho.py`, `python3 tools/teste_partitura_pagina.py`, `python3 servidor-pc/teste_partitura.py`. Exemplo: `docs/exemplos-partitura/completa.musicxml` (gerado por `tools/gerar_exemplos_partitura.py`).
+No app Android: o anfitrião tem a aba **PARTITURA** (importar o arquivo e escolher a parte de cada grupo) e cada cliente vê um cartão **Partitura** com a parte do grupo dele (pode trocar). A partitura é desenhada numa WebView (sem internet); o cursor usa o relógio, o metrônomo e o áudio do próprio app.
+
+Testes (precisam de Python + Playwright/Chromium): `python3 tools/teste_partitura_app.py`, `python3 tools/teste_partitura_leitor.py`, `python3 tools/teste_partitura_desenho.py`, `python3 tools/teste_partitura_pagina.py`, `python3 servidor-pc/teste_partitura.py`. Exemplo: `docs/exemplos-partitura/completa.musicxml` (gerado por `tools/gerar_exemplos_partitura.py`).
 
