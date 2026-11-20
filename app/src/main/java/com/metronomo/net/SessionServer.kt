@@ -505,7 +505,9 @@ class SessionServer(
 
         val next = synchronized(stateLock) {
             val current = state
-            val startAt = (nowMs() + LEAD_MS).toLong()
+            val nowNow = nowMs()
+            val wanted = body.optDouble("startAt", Double.NaN)   // início combinado com a música (opcional)
+            val startAt = if (!wanted.isNaN() && wanted >= nowNow - 500.0 && wanted <= nowNow + 15000.0) wanted.toLong() else (nowNow + LEAD_MS).toLong()
             val changed = when (type) {
                 "pause" -> current.copy(playing = false, startAt = startAt)
                 "settings" -> current.copy(

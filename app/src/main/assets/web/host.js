@@ -206,9 +206,33 @@
 
   document.addEventListener('sincrono-score', () => { if (!busy.size && !document.activeElement?.closest?.('#groups-list')) renderGroups(); });
 
-  $('play-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'play' }).then(refresh));
-  $('pause-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'pause' }).then(refresh));
-  $('stop-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'stop' }).then(refresh));
+  // O que o Tocar dispara: metrônomo (clique + cursor da partitura) e/ou áudio, começando no mesmo instante.
+  const withMetro = () => $('with-metro').checked, withAudio = () => $('with-audio').checked;
+  function metroSettings() { return typeof validSettings === 'function' ? validSettings() : { bpm: state.bpm, beatsPerBar: state.beatsPerBar }; }
+  $('play-all').addEventListener('click', async () => {
+    if (!withMetro() && !withAudio()) { hint('Marque Metrônomo e/ou Áudio.'); return; }
+    const startAt = serverNow() + 3000;
+    try {
+      if (withAudio()) await api('/api/audio/cmd?group=all', { type: 'play', startAt });
+      if (withMetro()) {
+        const s = metroSettings();
+        const interval = 60000 / s.bpm;
+        const pos = withAudio() && typeof songPositionMs === 'function' ? (songPositionMs() || 0) : 0;
+        const shift = pos > 1 ? (interval - (pos % interval)) % interval : 0;   // áudio retomado no meio: clique na próxima batida
+        await api('/api/command', { type: 'play', bpm: s.bpm, beatsPerBar: s.beatsPerBar, startAt: Math.round(startAt + shift) });
+      }
+    } catch { /* api já mostrou o erro */ }
+    refresh();
+  });
+  async function pauseAll(kind) {
+    try {
+      if (withAudio()) await api('/api/audio/cmd?group=all', { type: kind });
+      if (withMetro()) { const s = metroSettings(); await api('/api/command', { type: 'pause', bpm: s.bpm, beatsPerBar: s.beatsPerBar }); }
+    } catch { /* api já mostrou o erro */ }
+    refresh();
+  }
+  $('pause-all').addEventListener('click', () => pauseAll('pause'));
+  $('stop-all').addEventListener('click', () => pauseAll('stop'));
   $('start-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'seek', positionMs: 0 }).then(refresh));
   $('add-group').addEventListener('click', () => {
     const name = $('new-group').value.trim();

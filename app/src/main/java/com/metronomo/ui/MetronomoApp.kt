@@ -19,13 +19,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -505,11 +508,29 @@ private fun GroupsPanel() {
             )
         }
         Text("Todos os grupos", fontWeight = FontWeight.Medium)
+        // O que o botão Tocar dispara. A partitura segue o áudio, se ele toca; senão segue o metrônomo.
+        var withMetro by rememberSaveable { mutableStateOf(false) }
+        var withAudio by rememberSaveable { mutableStateOf(true) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Checkbox(checked = withMetro, onCheckedChange = { withMetro = it })
+            Text("Metrônomo", modifier = Modifier.clickable { withMetro = !withMetro })
+            Spacer(Modifier.width(12.dp))
+            Checkbox(checked = withAudio, onCheckedChange = { withAudio = it })
+            Text("Áudio", modifier = Modifier.clickable { withAudio = !withAudio })
+        }
+        Text(
+            "A partitura anda com o áudio; sem áudio, anda com o metrônomo (o andamento é o da aba SYNC).",
+            style = MaterialTheme.typography.bodySmall,
+            color = Pal.Graphite,
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TransportButton(Glyph.TO_START, "Voltar todos ao início", { SessionController.audioToStart("all") }, Modifier.weight(1f))
-            TransportButton(Glyph.PLAY, "Tocar todos", { SessionController.audioCommand("play", "all") }, Modifier.weight(1f), primary = true)
-            TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.audioCommand("pause", "all") }, Modifier.weight(1f))
-            TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.audioCommand("stop", "all") }, Modifier.weight(1f))
+            TransportButton(
+                Glyph.PLAY, "Tocar todos", { SessionController.playTogether(withMetro, withAudio) }, Modifier.weight(1f),
+                enabled = withMetro || withAudio, primary = true,
+            )
+            TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.pauseTogether(withMetro, withAudio, false) }, Modifier.weight(1f))
+            TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(withMetro, withAudio, true) }, Modifier.weight(1f))
         }
         info.groups.forEach { g ->
             HorizontalDivider(color = Pal.Hairline)

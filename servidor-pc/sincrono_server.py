@@ -42,6 +42,16 @@ CABLE = None
 
 LEAD_MS = 3000          # antecedência do início do metrônomo
 AUDIO_LEAD_MS = 2500.0  # antecedência do início da música
+
+
+def _wanted_start(body, now, default):
+    """Instante de início pedido pelo anfitrião (startAt, ms do servidor), para o metrônomo e a música
+    começarem JUNTOS. Só vale se estiver entre 0,5 s atrás e 15 s à frente; senão usa o padrão."""
+    try:
+        v = float(body.get("startAt"))
+    except (TypeError, ValueError):
+        return default
+    return v if now - 500 <= v <= now + 15000 else default
 AUDIO_STOP_MS = 1200.0  # antecedência da parada agendada
 PEER_TTL_MS = 6000.0
 MAX_GROUPS = 16
@@ -183,7 +193,7 @@ class Hub:
             if kind == "play":
                 if not (self.playing and self.stop_at is None):
                     start_from = self._position_at(now) if requested is None else requested
-                    self.start_at = now + AUDIO_LEAD_MS
+                    self.start_at = _wanted_start(body, now, now + AUDIO_LEAD_MS)
                     self.position_ms = max(0.0, float(start_from))
                     self.stop_at = None
                     self.reset_on_stop = False
@@ -265,7 +275,7 @@ class Session:
                 return 400, {"error": "BPM ou compasso inválido."}
         with self.lock:
             cur = self.state
-            start_at = int(now_ms() + LEAD_MS)
+            start_at = int(_wanted_start(body, now_ms(), now_ms() + LEAD_MS))
             nxt = dict(cur)
             if kind == "pause":
                 nxt.update(playing=False, startAt=start_at)

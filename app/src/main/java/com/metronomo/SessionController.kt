@@ -530,6 +530,45 @@ object SessionController {
         }
     }
 
+    /**
+     * Toca "todos" com o que o anfitrião escolheu: [metronome] (clique + cursor da partitura) e/ou [audio].
+     * Os dois começam no MESMO instante combinado (startAt). Se o áudio recomeça do meio, o primeiro clique
+     * cai na próxima batida alinhada com o arquivo.
+     */
+    fun playTogether(metronome: Boolean, audio: Boolean) {
+        val ck = clock ?: return
+        val c = client
+        val pb = audioPlayback
+        scope?.launch {
+            val startAt = ck.nowServerMs() + 3000.0
+            var error: String? = null
+            if (audio && pb != null) error = pb.command("play", null, "all", startAt)
+            if (error == null && metronome && c != null) {
+                val m = _ui.value.metronome
+                val interval = 60000.0 / m.bpm
+                val pos = if (audio) (pb?.positionMs() ?: 0.0) else 0.0
+                val shift = if (audio && pos > 1.0) (interval - pos % interval) % interval else 0.0
+                error = c.sendCommand("play", Math.round(m.bpm).toInt(), m.beatsPerBar, (startAt + shift).toLong())
+            }
+            _ui.update { it.copy(message = error) }
+        }
+    }
+
+    /** Pausa (ou, com [stop], para e volta ao início) o que o anfitrião escolheu: metrônomo e/ou áudio de todos. */
+    fun pauseTogether(metronome: Boolean, audio: Boolean, stop: Boolean) {
+        val c = client
+        val pb = audioPlayback
+        scope?.launch {
+            var error: String? = null
+            if (audio && pb != null) error = pb.command(if (stop) "stop" else "pause", null, "all")
+            if (error == null && metronome && c != null) {
+                val m = _ui.value.metronome
+                error = c.sendCommand("pause", Math.round(m.bpm).toInt(), m.beatsPerBar)
+            }
+            _ui.update { it.copy(message = error) }
+        }
+    }
+
     /** Apelido deste aparelho (vazio = usa o modelo). É o nome que o anfitrião vê nas listas. */
     fun nickname(context: Context): String =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_NICKNAME, "").orEmpty()

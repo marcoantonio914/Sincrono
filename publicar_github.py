@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Envia o projeto Sincrono para o GitHub.
 
-Uso (dentro da pasta do projeto (sincrono-v13), onde está a pasta oculta .git):
+Uso (dentro da pasta do projeto (sincrono-v14), onde está a pasta oculta .git):
     python3 publicar_github.py
 
 O token NÃO fica neste arquivo: o script pergunta (sem mostrar na tela) ou lê a variável de
@@ -31,7 +31,7 @@ def main():
     if subprocess.run(["git", "--version"], capture_output=True).returncode != 0:
         raise SystemExit("O git não está instalado. No Ubuntu: sudo apt install git")
     if not os.path.isdir(os.path.join(PASTA, ".git")):
-        raise SystemExit("Não achei a pasta .git aqui. Coloque este script dentro da pasta do projeto (sincrono-v13).")
+        raise SystemExit("Não achei a pasta .git aqui. Coloque este script dentro da pasta do projeto (sincrono-v14).")
 
     # repositório com o commit pronto; garante a branch main e o endereço (sem token)
     git("branch", "-M", "main")

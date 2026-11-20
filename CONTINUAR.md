@@ -107,6 +107,17 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Servidor do PC: `cd servidor-pc && python3 sincrono_server.py` (no Ubuntu, dentro do venv); testes: `teste_servidor.py`, `teste_transporte.py`, `teste_calibracao_cabo.py`.
 - Publicar: `python3 publicar_github.py` (cria/atualiza `origin` e pede o token na hora). Cada versão = um commit com os trailers `Co-Authored-By` e `Claude-Session` conforme a sessão.
 
+## 9a. v14 — "Tocar todos" com Metrônomo e/ou Áudio (feita; Kotlin NÃO compilado aqui) + achados do K284
+
+- Pedido do usuário: partitura+metrônomo sem áudio, com a opção de o áudio sair junto ou não. Na aba MÚSICA, junto de "Todos os grupos", há duas caixas **Metrônomo** e **Áudio** (padrão: só Áudio). Tocar/Pausar/Parar agem no que está marcado. O cursor já seguia o metrônomo (prioridade: áudio tocando > metrônomo); o que faltava era um botão que o disparasse ali.
+- Protocolo: `startAt` OPCIONAL (ms do servidor) em `POST /api/command` (play/settings) e em `POST /api/audio/cmd` (play). Só vale entre agora−0,5 s e agora+15 s; senão usa o padrão (3000 / 2500 ms). Quem inicia escolhe `startAt = agora+3000` e manda o mesmo aos dois: começam juntos. Se o áudio retoma no meio, o 1º clique cai na próxima batida alinhada com o arquivo (o acento do compasso não coincide com a barra da partitura nesse caso). Código: `_wanted_start` (Python), `AudioHub.wantedStart` e `SessionServer.handleCommand` (Kotlin), `SessionController.playTogether/pauseTogether`, `GroupsPanel` (caixas), `host.js` (`play-all`, `pauseAll`). Teste: `tools/teste_tocar_junto.py` (passa). O andamento do clique é o da aba SYNC (o app ainda não lê o andamento da partitura; na página existe o botão "Metrônomo = partitura").
+- **Partitura real K284-2.xml (Mozart, piano, 92 compassos, MuseScore 3) — o desenho NÃO está correto; achados ainda NÃO corrigidos:**
+  1. `<attributes><clef>` no MEIO do compasso: `parsePart` trata como estado do início do compasso (`m.clefs` é sobrescrito), então a pauta inteira usa a última clave (ex.: pauta de baixo em clave de sol). Precisa guardar trocas de clave com posição `q` por pauta e usar a clave vigente em cada nota; desenhar a clave pequena no ponto.
+  2. Dinâmicas ignoram `<staff>` da `<direction>`: todas caem abaixo da pauta 1 (duplicadas "p p", "f f"); devem ficar abaixo da pauta indicada.
+  3. Não desenhados: cifras (`<harmony>`, 231), ornamentos (trill-mark, inverted-mordent, turn), apojaturas (`<grace>`, 15), fermata só aproximada, staccato só em parte. Ligaduras/hastes/barras de vozes 2+ no piano merecem revisão (vozes 5 em diante na pauta 2).
+  4. Detectar fórmula de compasso e andamento: o leitor já expõe `initialBpm`/`initialTime`; falta o app Android usá-los (hoje só a página, botão "Metrônomo = partitura").
+  5. Tocar as notas (síntese) — viabilidade respondida ao usuário só em conversa: dá, com um sintetizador simples no próprio aparelho agendado pelo relógio compartilhado; NÃO implementado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.

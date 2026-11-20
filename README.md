@@ -114,3 +114,7 @@ No app Android: na aba **MÚSICA** o anfitrião importa a partitura e, no cartã
 
 Testes (precisam de Python + Playwright/Chromium): `python3 tools/teste_partitura_app.py`, `python3 tools/teste_partitura_leitor.py`, `python3 tools/teste_partitura_desenho.py`, `python3 tools/teste_partitura_pagina.py`, `python3 servidor-pc/teste_partitura.py`. Exemplo: `docs/exemplos-partitura/completa.musicxml` (gerado por `tools/gerar_exemplos_partitura.py`).
 
+
+## v14: partitura com metrônomo, com ou sem áudio
+
+Na aba **MÚSICA**, em "Todos os grupos", marque **Metrônomo** e/ou **Áudio** e toque. Só metrônomo: a partitura anda com o clique (andamento da aba SYNC). Só áudio: como antes. Os dois: começam no mesmo instante. Pausar e Parar agem no que está marcado. Teste: `python3 tools/teste_tocar_junto.py`.

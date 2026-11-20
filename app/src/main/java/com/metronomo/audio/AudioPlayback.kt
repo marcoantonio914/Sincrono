@@ -115,10 +115,11 @@ class AudioPlayback(
     }
 
     /** Envia um comando (play, pause, seek, stop). Devolve null se deu certo, ou a mensagem de erro. */
-    suspend fun command(type: String, positionMs: Double? = null, targetGroup: String? = null): String? = withContext(Dispatchers.IO) {
+    suspend fun command(type: String, positionMs: Double? = null, targetGroup: String? = null, startAt: Double? = null): String? = withContext(Dispatchers.IO) {
         try {
             val body = JSONObject().put("type", type)
             if (positionMs != null) body.put("positionMs", positionMs)
+            if (startAt != null) body.put("startAt", startAt)
             val (code, text) = request("POST", "/api/audio/cmd?group=${URLEncoder.encode(targetGroup ?: group, "UTF-8")}", body.toString())
             if (code in 200..299) {
                 null

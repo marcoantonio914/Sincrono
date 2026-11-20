@@ -135,6 +135,12 @@ class AudioHub(private val nowMs: () -> Double) {
         }
     }
 
+    /** Início combinado com o metrônomo (campo startAt, ms do servidor): só vale entre 0,5 s atrás e 15 s à frente. */
+    private fun wantedStart(o: JSONObject, now: Double, default: Double): Double {
+        val v = o.optDouble("startAt", Double.NaN)
+        return if (!v.isNaN() && v >= now - 500.0 && v <= now + 15000.0) v else default
+    }
+
     private fun positionAt(t: Double): Double = when {
         !playing -> positionMs
         t <= startAt -> positionMs
@@ -151,7 +157,7 @@ class AudioHub(private val nowMs: () -> Double) {
             "play" -> {
                 if (!(playing && stopAt.isNaN())) {
                     val from = if (requested.isNaN()) positionAt(now) else requested
-                    startAt = now + LEAD_MS
+                    startAt = wantedStart(o, now, now + LEAD_MS)
                     positionMs = from.coerceAtLeast(0.0)
                     stopAt = Double.NaN
                     resetOnStop = false

@@ -90,6 +90,11 @@
           <p class="hint">No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Importe aqui e, no cartão de cada grupo, escolha o arquivo de áudio e a parte da partitura: o grupo todo recebe os dois.</p>
           <p id="score-msg" class="hint" aria-live="polite"></p>
         </div>
+        <div class="row">
+          <label><input id="with-metro" type="checkbox"> Metrônomo</label>
+          <label><input id="with-audio" type="checkbox" checked> Áudio</label>
+        </div>
+        <p class="hint">A partitura anda com o áudio; sem áudio, anda com o metrônomo (o andamento é o da aba SYNC). Os dois começam juntos.</p>
         <div class="row icons">
           <button id="start-all" type="button" aria-label="Voltar todos ao início" title="Voltar todos ao início"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
           <button id="play-all" type="button" class="primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
