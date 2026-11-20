@@ -81,3 +81,12 @@ button.big { min-height: 56px; font-size: 1.05rem; }
 #score .row button { min-height: 40px; padding: 4px 10px; }
 #score-groups .row span { min-width: 90px; }
 @media (min-width: 900px) { body.has-score main { width: min(100%, 960px); } }
+
+/* A partitura é larga: tem de rolar DENTRO da caixa, sem esticar a coluna (grades têm min-width:auto). */
+main, .tab { grid-template-columns: minmax(0, 1fr); }
+main > *, .tab > * { min-width: 0; }
+#score-view { max-width: 100%; box-sizing: border-box; }
+.group-score { border-bottom: 1px solid var(--recessed); padding-bottom: 8px; margin-bottom: 8px; }
+#score .row { flex-wrap: nowrap; }
+#score .row select { flex: 1 1 0; min-width: 0; }
+#score .row button { flex: 0 0 auto; width: auto; min-width: 44px; padding: 4px 10px; }

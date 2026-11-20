@@ -54,15 +54,6 @@
         </div>
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>
-        <div class="host-only">
-          <div class="row">
-            <input id="score-file" type="file" accept=".musicxml,.xml,.mxl" class="grow" aria-label="Importar partitura (MusicXML)">
-            <button id="score-tempo" type="button" title="Ajusta o metrônomo ao andamento da partitura">Metrônomo = partitura</button>
-            <button id="score-remove" type="button" class="danger">Remover</button>
-          </div>
-          <p class="hint">No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Depois de importar, escolha a parte de cada grupo na aba ÁUDIO, no cartão do grupo: o cliente vê na hora.</p>
-        </div>
-        <p id="score-msg" class="hint" aria-live="polite"></p>
       </section>
       <section class="fields host-only" aria-label="Configurações">
         <label>BPM <input id="bpm" type="number" min="30" max="300" value="120" inputmode="numeric"></label>
@@ -87,8 +78,18 @@
       </div>
       <div class="tab" data-tab="audio" hidden>
       <section id="groups-panel" class="offset host-only" aria-label="Grupos">
-        <h2>Grupos de aparelhos</h2>
-        <p class="hint" id="groups-hint">Cada grupo toca o seu arquivo; todos seguem o mesmo relógio. Carregando…</p>
+        <h2>Grupos de aparelhos: áudio e partitura</h2>
+        <p class="hint" id="groups-hint">Cada grupo toca o seu arquivo e vê a sua parte da partitura; todos seguem o mesmo relógio. Carregando…</p>
+        <div id="score-admin" class="group-score">
+          <div class="row">
+            <strong class="grow" id="score-name">Partitura: nenhuma</strong>
+            <input id="score-file" type="file" accept=".musicxml,.xml,.mxl" aria-label="Importar partitura (MusicXML)">
+            <button id="score-tempo" type="button" title="Ajusta o metrônomo ao andamento da partitura" hidden>Metrônomo = partitura</button>
+            <button id="score-remove" type="button" class="danger" hidden>Remover</button>
+          </div>
+          <p class="hint">No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Importe aqui e, no cartão de cada grupo, escolha o arquivo de áudio e a parte da partitura: o grupo todo recebe os dois.</p>
+          <p id="score-msg" class="hint" aria-live="polite"></p>
+        </div>
         <div class="row icons">
           <button id="start-all" type="button" aria-label="Voltar todos ao início" title="Voltar todos ao início"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
           <button id="play-all" type="button" class="primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
@@ -165,7 +166,7 @@
     </main>
     <nav id="tabs" class="host-only" aria-label="Seções">
       <button type="button" data-go="sync">SYNC</button>
-      <button type="button" data-go="audio">ÁUDIO</button>
+      <button type="button" data-go="audio">MÚSICA</button>
       <button type="button" data-go="mixer">MIXER</button>
       <button type="button" data-go="net">REDE</button>
     </nav>

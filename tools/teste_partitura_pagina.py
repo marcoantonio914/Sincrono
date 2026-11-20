@@ -41,15 +41,19 @@ try:
         pg.wait_for_timeout(500)
         if pg.is_visible("#start-host"):
             pg.click("#start-host")
-        check("painel de partitura começa escondido para o cliente e visível ao anfitrião", pg.is_visible("#score"))
+        check("sem partitura, o painel não aparece", not pg.is_visible("#score"))
+        pg.click('#tabs [data-go="audio"]')
+        check("importar fica no mesmo painel dos grupos (aba MÚSICA)", pg.is_visible("#score-admin") and pg.is_visible("#groups-list") and pg.inner_text('#tabs [data-go="audio"]') == "MÚSICA")
+        pg.click('#tabs [data-go="sync"]')
         pg.set_input_files("#score-file", files=[{"name": "completa.musicxml", "mimeType": "application/xml", "buffer": xml}])
         pg.wait_for_selector("#score-view svg", timeout=6000)
         check("partitura enviada e desenhada", pg.locator("#score-view svg").count() == 1)
         opts = pg.eval_on_selector_all("#score-part option", "o => o.map(x => x.textContent)")
         check("lista as 3 partes + parte do grupo", len(opts) == 4 and "Violoncelo" in opts and opts[0].startswith("Parte do meu grupo (Soprano"), opts)
         check("a lista separada de grupos na seção da partitura não existe mais", pg.locator("#score-groups").count() == 0)
+        check("o nome da partitura aparece no painel de grupos", "completa.musicxml" in pg.inner_text("#score-name"))
         # parte do grupo: escolhida DENTRO do cartão do grupo (aba ÁUDIO), como o áudio
-        pg.click('#tabs [data-tab="audio"], #tabs button:has-text("ÁUDIO")')
+        pg.click('#tabs [data-go="audio"]')
         pg.wait_for_selector("#groups-list select[aria-label^='Parte da partitura']", timeout=6000)
         check("cartão do grupo tem o seletor 'Parte da partitura'", pg.locator("#groups-list select[aria-label^='Parte da partitura']").count() == 1)
         # cliente já aberto no grupo Geral
@@ -63,7 +67,7 @@ try:
         dt = time.time() - t0
         txt = cl.eval_on_selector("#score-view svg", "s => s.textContent")
         check("ao escolher a parte no cartão do grupo, o cliente passa a ver o violoncelo em até 2,5 s (levou %.1f s)" % dt, dt < 2.5 and "mp" in txt and "La" not in txt, dt)
-        pg.click('#tabs [data-tab="sync"], #tabs button:has-text("SYNC")')
+        pg.click('#tabs [data-go="sync"]')
         pg.wait_for_timeout(300)
         # cursor pelo metrônomo
         api("/api/command", {"type": "play", "bpm": 100, "beatsPerBar": 4})
@@ -92,6 +96,7 @@ try:
         check("cliente troca para a própria parte (piano: sem 'La' e sem 'mp')", "La" not in ptxt and "mp" not in ptxt and "Andante" in ptxt, ptxt[:100])
         # remover
         pg.once("dialog", lambda d: d.accept())
+        pg.click('#tabs [data-go="audio"]')
         pg.click("#score-remove"); pg.wait_for_timeout(2500)
         check("remover tira a partitura do anfitrião e do cliente", api("/api/score")["file"] is None and cl.evaluate("document.querySelector('#score').hidden"))
         check("sem erros de JavaScript", not erros, erros)

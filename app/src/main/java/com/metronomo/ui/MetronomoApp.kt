@@ -94,7 +94,7 @@ fun MetronomoApp() {
     }
 }
 
-private val TAB_NAMES = listOf("SYNC", "ÁUDIO", "MIXER", "REDE", "PARTITURA")
+private val TAB_NAMES = listOf("SYNC", "MÚSICA", "MIXER", "REDE")
 
 /** Navegação inferior: só texto, o item ativo em tinta escura e com um filete no alto. */
 @Composable
@@ -350,11 +350,13 @@ private fun SessionScreen(ui: UiState, tab: Int) {
     ) {
         StatusModule(ui)
         when (tab) {
-            0 -> SyncTab(ui, bpm, beats, beatInfo, { bpm = it }, { beats = it })
+            0 -> {
+                SyncTab(ui, bpm, beats, beatInfo, { bpm = it }, { beats = it })
+                ScoreCard(ui)
+            }
             1 -> AudioTab(ui)
             2 -> MixerTab(ui)
-            3 -> NetworkTab(ui)
-            else -> ScoreTab(ui)
+            else -> NetworkTab(ui)
         }
         ui.message?.let { Text(it, color = Pal.Bad, style = MaterialTheme.typography.bodySmall) }
         OutlinedButton(
@@ -458,10 +460,11 @@ private fun AudioTab(ui: UiState) {
     Module("Áudio do meu grupo", ui.groupName) {
         AudioSection(ui)
     }
+    // O que o grupo toca e o que ele lê são uma coisa só: arquivo de áudio + parte da partitura, no cartão do grupo.
     if (ui.role == SessionController.Role.HOST) GroupsPanel()
 }
 
-/** Só o anfitrião: cria grupos, escolhe o arquivo de cada um, move aparelhos entre eles e toca todos juntos. */
+/** Só o anfitrião: cria grupos, escolhe o arquivo de áudio e a parte da partitura de cada um, move aparelhos entre eles e toca todos juntos. */
 @Composable
 private fun GroupsPanel() {
     val context = LocalContext.current
@@ -474,6 +477,9 @@ private fun GroupsPanel() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) SessionController.pickAudio(context, uri, pickTarget)
     }
+    val scorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) SessionController.importScore(context, uri)
+    }
 
     Module("Grupos de aparelhos", "${info.groups.size}") {
         Text(
@@ -481,6 +487,23 @@ private fun GroupsPanel() {
             style = MaterialTheme.typography.bodySmall,
             color = Pal.Graphite,
         )
+        // Partitura da sessão (MusicXML do MuseScore): importa-se uma vez; cada grupo escolhe a sua parte no cartão abaixo.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (score.fileName.isEmpty()) "Partitura: nenhuma" else "Partitura: ${score.fileName}",
+                modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.Medium,
+            )
+            FilledTonalButton(onClick = { scorePicker.launch(arrayOf("*/*")) }) { Text(if (score.fileName.isEmpty()) "Importar" else "Trocar") }
+            if (score.fileName.isNotEmpty()) OutlinedButton(onClick = { SessionController.clearScore() }) { Text("Remover", color = Pal.Bad) }
+        }
+        if (score.fileName.isEmpty()) {
+            Text(
+                "No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Depois de importar, cada grupo ganha a opção \"Parte da partitura\".",
+                style = MaterialTheme.typography.bodySmall,
+                color = Pal.Graphite,
+            )
+        }
         Text("Todos os grupos", fontWeight = FontWeight.Medium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TransportButton(Glyph.TO_START, "Voltar todos ao início", { SessionController.audioToStart("all") }, Modifier.weight(1f))
@@ -577,7 +600,7 @@ private fun GroupRow(g: GroupInfo, level: Float, score: ScoreInfo, onPick: () ->
                 modifier = Modifier.weight(1f),
             ) { Text(if (editing) "Cancelar" else "Renomear") }
         }
-        // Parte da partitura que este grupo vê (só aparece depois de importar a partitura na aba PARTITURA).
+        // Parte da partitura que este grupo vê (só aparece depois de importar a partitura na aba MÚSICA).
         if (score.partNames.isNotEmpty()) {
             var openParts by remember(g.id) { mutableStateOf(false) }
             val current = (score.parts[g.id] ?: 0).coerceIn(0, score.partNames.size - 1)

@@ -3,17 +3,15 @@ package com.metronomo.ui
 import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -29,7 +27,7 @@ import kotlinx.coroutines.delay
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun ScoreWebView(baseUrl: String, host: Boolean, height: Dp, modifier: Modifier = Modifier) {
+fun ScoreWebView(baseUrl: String, height: Dp, modifier: Modifier = Modifier) {
     val ref = remember { arrayOfNulls<WebView>(1) }
     AndroidView(
         modifier = modifier.fillMaxWidth().height(height),
@@ -39,7 +37,7 @@ fun ScoreWebView(baseUrl: String, host: Boolean, height: Dp, modifier: Modifier 
                 settings.domStorageEnabled = true // guarda a parte escolhida por este aparelho
                 settings.mediaPlaybackRequiresUserGesture = true
                 webViewClient = WebViewClient()
-                loadUrl("$baseUrl/score.html" + if (host) "?host=1" else "")
+                loadUrl("$baseUrl/score.html")
                 ref[0] = this
             }
         },
@@ -53,33 +51,13 @@ fun ScoreWebView(baseUrl: String, host: Boolean, height: Dp, modifier: Modifier 
     DisposableEffect(Unit) { onDispose { ref[0]?.destroy(); ref[0] = null } }
 }
 
-/** Aba do anfitrião: importar a partitura do MuseScore, escolher a parte de cada grupo e ver o cursor. */
-@Composable
-fun ScoreTab(ui: UiState) {
-    val context = LocalContext.current
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) SessionController.importScore(context, uri)
-    }
-    Module("Partitura", null) {
-        Text(
-            "No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). " +
-                "Importe aqui. Depois escolha a parte de cada grupo na aba ÁUDIO, no cartão do grupo: os aparelhos do grupo passam a ver essa parte na hora. Cada músico pode trocar a própria parte no aparelho dele.",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-        )
-        Button(
-            onClick = { picker.launch(arrayOf("*/*")) },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Importar partitura (MusicXML)") }
-        if (ui.baseUrl.isNotEmpty()) ScoreWebView(ui.baseUrl, host = true, height = 560.dp)
-    }
-}
-
-/** Cartão do cliente: só a partitura (a parte do grupo dele, com opção de trocar) e o cursor. */
+/** Cartão da partitura (anfitrião e cliente): a parte do grupo do aparelho, com opção de trocar, e o cursor. Só aparece se há partitura. */
 @Composable
 fun ScoreCard(ui: UiState) {
-    if (ui.baseUrl.isNotEmpty()) {
+    val file by SessionController.scoreFile.collectAsState()
+    if (ui.baseUrl.isNotEmpty() && file.isNotEmpty()) {
         Module("Partitura", null) {
-            ScoreWebView(ui.baseUrl, host = false, height = 360.dp)
+            ScoreWebView(ui.baseUrl, height = 380.dp)
         }
     }
 }

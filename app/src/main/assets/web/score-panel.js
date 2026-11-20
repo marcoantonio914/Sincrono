@@ -13,7 +13,9 @@
   try { mode = localStorage.getItem('sincrono.scoreMode') === 'pages' ? 'pages' : 'continuous'; zoom = Number(localStorage.getItem('sincrono.scoreZoom')) || 1; } catch { /* sem armazenamento */ }
   const isGuest = () => document.body.classList.contains('guest');
   const myGroup = () => (typeof songGroup !== 'undefined' ? songGroup : 'g1');
-  const msg = (t) => { $('score-msg').textContent = t || ''; };
+  const msg = (t) => { const e = $('score-msg'); if (e) e.textContent = t || ''; };
+  const on = (id, ev, fn) => { const e = $(id); if (e) e.addEventListener(ev, fn); };
+  const setHidden = (id, v) => { const e = $(id); if (e) e.hidden = v; };
 
   function override() {
     try { const o = JSON.parse(localStorage.getItem('sincrono.part') || 'null'); return o && info.file && o.sig === sig() ? o.idx : null; } catch { return null; }
@@ -101,7 +103,9 @@
       const changedPart = JSON.stringify(next.parts) !== JSON.stringify(info.parts);
       info = next;
       document.body.classList.toggle('has-score', !!next.file);
-      sec.hidden = !next.file && isGuest();
+      sec.hidden = !next.file;
+      const nm = $('score-name'); if (nm) nm.textContent = next.file ? 'Partitura: ' + next.file.name : 'Partitura: nenhuma';
+      setHidden('score-tempo', !next.file); setHidden('score-remove', !next.file);
       if (!next.file) { score = null; loadedId = 0; box.textContent = ''; view = null; $('score-info').textContent = ''; sel.textContent = ''; publish(); return; }
       if (next.file.id !== loadedId) await loadFile(next.file.id);
       else if (changedPart) { renderSelect(); draw(); }
@@ -134,13 +138,13 @@
   }, 40);
 
   // ---------- botões
-  $('score-mode').addEventListener('click', () => { mode = mode === 'pages' ? 'continuous' : 'pages'; try { localStorage.setItem('sincrono.scoreMode', mode); } catch { /* */ } draw(); });
+  on('score-mode', 'click', () => { mode = mode === 'pages' ? 'continuous' : 'pages'; try { localStorage.setItem('sincrono.scoreMode', mode); } catch { /* */ } draw(); });
   const setZoom = (z) => { zoom = Math.min(2.5, Math.max(0.6, z)); try { localStorage.setItem('sincrono.scoreZoom', String(zoom)); } catch { /* */ } draw(); };
-  $('score-zoom-in').addEventListener('click', () => setZoom(zoom + 0.15));
-  $('score-zoom-out').addEventListener('click', () => setZoom(zoom - 0.15));
+  on('score-zoom-in', 'click', () => setZoom(zoom + 0.15));
+  on('score-zoom-out', 'click', () => setZoom(zoom - 0.15));
   let rt = null;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (mode === 'pages') draw(); }, 200); });
-  $('score-file').addEventListener('change', async (ev) => {
+  on('score-file', 'change', async (ev) => {
     const f = ev.target.files[0]; if (!f) return;
     msg('Enviando ' + f.name + '…');
     try {
@@ -150,8 +154,8 @@
     ev.target.value = '';
     poll(true);
   });
-  $('score-remove').addEventListener('click', () => { if (info.file && confirm('Remover a partitura da sessão?')) post('/api/score/clear', {}); });
-  $('score-tempo').addEventListener('click', async () => {
+  on('score-remove', 'click', () => { if (info.file && confirm('Remover a partitura da sessão?')) post('/api/score/clear', {}); });
+  on('score-tempo', 'click', async () => {
     if (!score) return;
     const t = score.initialTime || { b: 4 };
     await post('/api/command', { type: 'settings', bpm: Math.round(score.initialBpm), beatsPerBar: Math.max(1, Math.min(12, Math.round(t.b))) });

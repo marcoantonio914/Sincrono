@@ -151,6 +151,10 @@ object SessionController {
     private val _score = MutableStateFlow(ScoreInfo())
     val score: StateFlow<ScoreInfo> = _score.asStateFlow()
 
+    /** Nome da partitura da sessão ("" se não há), consultado no servidor a cada 1 s; o cartão da partitura só aparece se houver. */
+    private val _scoreFile = MutableStateFlow("")
+    val scoreFile: StateFlow<String> = _scoreFile.asStateFlow()
+
     /** Grupos da sessão e a atribuição dos aparelhos, como vistos por este aparelho. */
     private val _groups = MutableStateFlow(GroupsInfo())
     val groups: StateFlow<GroupsInfo> = _groups.asStateFlow()
@@ -231,6 +235,7 @@ object SessionController {
         server?.clearAllAudio()
         _groups.value = GroupsInfo()
         _score.value = ScoreInfo()
+        _scoreFile.value = ""
         server?.onScoreChanged = null
         server?.stop()
         scope?.cancel()
@@ -652,6 +657,24 @@ object SessionController {
             .toString()
     }
 
+    /** Nome do arquivo da partitura da sessão ("" se não há); null se não deu para perguntar ao servidor agora. */
+    private fun fetchScoreName(baseUrl: String): String? = try {
+        val c = java.net.URL("$baseUrl/api/score").openConnection() as java.net.HttpURLConnection
+        c.connectTimeout = 1500
+        c.readTimeout = 1500
+        try {
+            if (c.responseCode != 200) null
+            else {
+                val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                if (o.isNull("file")) "" else o.getJSONObject("file").optString("name", "partitura")
+            }
+        } finally {
+            c.disconnect()
+        }
+    } catch (e: Exception) {
+        null
+    }
+
     fun beatInfo(): BeatInfo? {
         val s = _ui.value.metronome
         val ck = clock ?: return null
@@ -752,6 +775,14 @@ object SessionController {
         audioPlayback = playback
         _audio.value = AudioPlayback.Ui()
 
+        _scoreFile.value = ""
+        sc.launch(Dispatchers.IO) {
+            while (isActive) {
+                val name = fetchScoreName(url)
+                if (name != null) _scoreFile.value = name
+                delay(1000)
+            }
+        }
         en.start()
         ap.start()
         playback.start()
