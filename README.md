@@ -108,7 +108,7 @@ Botão **"Autocalibrar este aparelho"** na seção de calibração. O aparelho t
 
 ## v13: partitura na tela
 
-No MuseScore: Arquivo → Exportar → **MusicXML** (a partitura completa, uma vez só). No Sincrono (computador como anfitrião) abra a seção "Partitura" na aba SYNC, importe o arquivo e escolha **qual parte cada grupo vê**; cada músico pode trocar a sua parte no próprio aparelho. O cursor segue o metrônomo e, se houver áudio tocando (exportado do MuseScore), o áudio. Repetições, casas 1/2, da capo/segno/coda e mudanças de andamento são respeitados.
+No MuseScore: Arquivo → Exportar → **MusicXML** (a partitura completa, uma vez só). No Sincrono (computador como anfitrião) abra a seção "Partitura" na aba SYNC, importe o arquivo e, no cartão de cada grupo (aba ÁUDIO), escolha a **Parte da partitura** do grupo — os clientes do grupo passam a ver na hora; cada músico pode trocar a sua parte no próprio aparelho. O cursor segue o metrônomo e, se houver áudio tocando (exportado do MuseScore), o áudio. Repetições, casas 1/2, da capo/segno/coda e mudanças de andamento são respeitados.
 
 No app Android: o anfitrião tem a aba **PARTITURA** (importar o arquivo e escolher a parte de cada grupo) e cada cliente vê um cartão **Partitura** com a parte do grupo dele (pode trocar). A partitura é desenhada numa WebView (sem internet); o cursor usa o relógio, o metrônomo e o áudio do próprio app.
 

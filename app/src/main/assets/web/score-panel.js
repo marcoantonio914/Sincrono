@@ -8,7 +8,7 @@
   const box = $('score-view');
   const sel = $('score-part');
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
-  let groups = [], view = null, drawnGroup = '';
+  let view = null, drawnGroup = '';
   let mode = 'continuous', zoom = 1;
   try { mode = localStorage.getItem('sincrono.scoreMode') === 'pages' ? 'pages' : 'continuous'; zoom = Number(localStorage.getItem('sincrono.scoreZoom')) || 1; } catch { /* sem armazenamento */ }
   const isGuest = () => document.body.classList.contains('guest');
@@ -51,20 +51,14 @@
     last = '';
   }
 
-  function renderGroups() {
-    const holder = $('score-groups');
-    if (!holder || isGuest() || !score) { if (holder) holder.textContent = ''; return; }
-    if (holder.contains(document.activeElement)) return;
-    holder.textContent = '';
-    for (const g of groups) {
-      const r = document.createElement('div'); r.className = 'row';
-      const l = document.createElement('span'); l.className = 'muted'; l.textContent = g.name;
-      const s = document.createElement('select'); s.className = 'grow'; s.setAttribute('aria-label', 'Parte do grupo ' + g.name);
-      score.parts.forEach((p, i) => s.add(new Option(p.name, String(i), false, (info.parts[g.id] || 0) === i)));
-      s.addEventListener('change', () => post('/api/score/part', { group: g.id, part: Number(s.value) }));
-      r.append(l, s); holder.appendChild(r);
-    }
+  // Informa à camada do anfitrião (host.js) as partes e a escolha de cada grupo, para o cartão do grupo mostrar o seletor.
+  function publish() {
+    const names = score ? score.parts.map((p) => p.name) : [];
+    const before = JSON.stringify(window.SincronoScoreInfo || null);
+    window.SincronoScoreInfo = { fileName: info.file ? info.file.name : '', partNames: names, parts: info.parts || {} };
+    if (JSON.stringify(window.SincronoScoreInfo) !== before) document.dispatchEvent(new Event('sincrono-score'));
   }
+  window.sincronoScoreSetPart = (group, part) => post('/api/score/part', { group, part });
 
   async function post(path, body) {
     try {
@@ -83,7 +77,7 @@
       const s = await SincronoScore.load(await r.arrayBuffer());
       if (loadingId !== id) return;
       score = s; loadedId = id; msg('');
-      renderSelect(); draw(); showInfo();
+      renderSelect(); draw(); showInfo(); publish();
     } catch (e) { msg('Não consegui abrir a partitura: ' + (e && e.message ? e.message : e)); score = null; loadedId = id; }
     finally { if (loadingId === id) loadingId = 0; }
   }
@@ -101,18 +95,17 @@
     if (polling && !force) return;
     polling = true;
     try {
-      const [r, g] = await Promise.all([fetch('/api/score', { cache: 'no-store' }), fetch('/api/groups', { cache: 'no-store' }).catch(() => null)]);
-      if (g && g.ok) groups = (await g.json()).groups || [];
+      const r = await fetch('/api/score', { cache: 'no-store' });
       if (!r.ok) { sec.hidden = true; return; }
       const next = await r.json();
       const changedPart = JSON.stringify(next.parts) !== JSON.stringify(info.parts);
       info = next;
       document.body.classList.toggle('has-score', !!next.file);
       sec.hidden = !next.file && isGuest();
-      if (!next.file) { score = null; loadedId = 0; box.textContent = ''; view = null; $('score-info').textContent = ''; sel.textContent = ''; renderGroups(); return; }
+      if (!next.file) { score = null; loadedId = 0; box.textContent = ''; view = null; $('score-info').textContent = ''; sel.textContent = ''; publish(); return; }
       if (next.file.id !== loadedId) await loadFile(next.file.id);
       else if (changedPart) { renderSelect(); draw(); }
-      renderGroups(); showInfo();
+      publish(); showInfo();
     } catch { /* servidor sem partitura: painel fica escondido */ }
     finally { polling = false; }
   }
@@ -165,5 +158,5 @@
   });
 
   poll();
-  setInterval(poll, 2000);
+  setInterval(poll, 1000);   // a escolha do anfitrião aparece para os clientes em ~1 s
 })();

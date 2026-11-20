@@ -47,12 +47,24 @@ try:
         check("partitura enviada e desenhada", pg.locator("#score-view svg").count() == 1)
         opts = pg.eval_on_selector_all("#score-part option", "o => o.map(x => x.textContent)")
         check("lista as 3 partes + parte do grupo", len(opts) == 4 and "Violoncelo" in opts and opts[0].startswith("Parte do meu grupo (Soprano"), opts)
-        check("anfitrião vê a escolha de parte por grupo", pg.locator("#score-groups select").count() == 1)
-        # parte do grupo
-        pg.select_option("#score-groups select", "1")
-        pg.wait_for_timeout(2600)
-        txt = pg.eval_on_selector("#score-view svg", "s => s.textContent")
-        check("grupo trocou para o violoncelo (sem letra 'La', clave de fá)", "La" not in txt and "mp" in txt, txt[:120])
+        check("a lista separada de grupos na seção da partitura não existe mais", pg.locator("#score-groups").count() == 0)
+        # parte do grupo: escolhida DENTRO do cartão do grupo (aba ÁUDIO), como o áudio
+        pg.click('#tabs [data-tab="audio"], #tabs button:has-text("ÁUDIO")')
+        pg.wait_for_selector("#groups-list select[aria-label^='Parte da partitura']", timeout=6000)
+        check("cartão do grupo tem o seletor 'Parte da partitura'", pg.locator("#groups-list select[aria-label^='Parte da partitura']").count() == 1)
+        # cliente já aberto no grupo Geral
+        cl = b.new_page(viewport={"width": 420, "height": 800})
+        cl.on("pageerror", lambda e: erros.append(str(e)))
+        cl.goto(BASE + "/?guest=1")
+        cl.wait_for_selector("#score-view svg", timeout=6000)
+        t0 = time.time()
+        pg.select_option("#groups-list select[aria-label^='Parte da partitura']", "1")
+        cl.wait_for_function("() => { const t = document.querySelector('#score-view svg').textContent; return t.includes('mp') && !t.includes('La'); }", timeout=4000)
+        dt = time.time() - t0
+        txt = cl.eval_on_selector("#score-view svg", "s => s.textContent")
+        check("ao escolher a parte no cartão do grupo, o cliente passa a ver o violoncelo em até 2,5 s (levou %.1f s)" % dt, dt < 2.5 and "mp" in txt and "La" not in txt, dt)
+        pg.click('#tabs [data-tab="sync"], #tabs button:has-text("SYNC")')
+        pg.wait_for_timeout(300)
         # cursor pelo metrônomo
         api("/api/command", {"type": "play", "bpm": 100, "beatsPerBar": 4})
         pg.wait_for_timeout(600)
@@ -73,16 +85,8 @@ try:
         pg.click("#score-mode"); pg.wait_for_timeout(300)
         check("modo páginas quebra em linhas", pg.evaluate("document.querySelector('#score-view').classList.contains('pages')"))
         pg.click("#score-zoom-in"); pg.click("#score-zoom-out")
-        # cliente
-        cl = b.new_page(viewport={"width": 420, "height": 800})
-        cl.on("pageerror", lambda e: erros.append(str(e)))
-        cl.goto(BASE + "/?guest=1")
-        cl.wait_for_timeout(500)
-        if cl.is_visible("#start-join"): pass
-        cl.wait_for_selector("#score-view svg", timeout=6000)
+        # cliente (já aberto acima)
         check("cliente vê a partitura, sem os controles de importar", cl.is_visible("#score-view") and not cl.is_visible("#score-file"))
-        gtxt = cl.eval_on_selector("#score-view svg", "s => s.textContent")
-        check("cliente (grupo Geral) vê a parte escolhida para o grupo (violoncelo)", "La" not in gtxt and "mp" in gtxt, gtxt[:100])
         cl.select_option("#score-part", "2"); cl.wait_for_timeout(300)
         ptxt = cl.eval_on_selector("#score-view svg", "s => s.textContent")
         check("cliente troca para a própria parte (piano: sem 'La' e sem 'mp')", "La" not in ptxt and "mp" not in ptxt and "Andante" in ptxt, ptxt[:100])

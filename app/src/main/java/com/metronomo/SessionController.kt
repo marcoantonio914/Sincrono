@@ -23,6 +23,7 @@ import com.metronomo.net.Discovery
 import com.metronomo.net.GroupsInfo
 import com.metronomo.net.MixClient
 import com.metronomo.net.NetworkBinder
+import com.metronomo.net.ScoreInfo
 import com.metronomo.net.SessionClient
 import com.metronomo.net.SessionServer
 import kotlinx.coroutines.CoroutineScope
@@ -146,6 +147,10 @@ object SessionController {
     private val _mixLevels = MutableStateFlow<Map<String, Double>>(emptyMap())
     val mixLevels: StateFlow<Map<String, Double>> = _mixLevels.asStateFlow()
 
+    /** Partitura importada (só no anfitrião): nomes das partes e a parte de cada grupo. */
+    private val _score = MutableStateFlow(ScoreInfo())
+    val score: StateFlow<ScoreInfo> = _score.asStateFlow()
+
     /** Grupos da sessão e a atribuição dos aparelhos, como vistos por este aparelho. */
     private val _groups = MutableStateFlow(GroupsInfo())
     val groups: StateFlow<GroupsInfo> = _groups.asStateFlow()
@@ -191,6 +196,8 @@ object SessionController {
             srv.groups.assignments().forEach { (k, v) -> assign.put(k, v) }
             hostPrefs.edit().putString(KEY_GROUPS, o.put("names", names).put("assign", assign).toString()).apply()
         }
+        _score.value = ScoreInfo()
+        srv.onScoreChanged = { _score.value = srv.scoreInfo() }
         discovery(context).register(port, Build.MODEL ?: "anfitrião")
         val urls = localAddresses().map { "http://$it:$port" }
         begin(context, Role.HOST, "http://127.0.0.1:$port", urls)
@@ -223,6 +230,8 @@ object SessionController {
         _audio.value = AudioPlayback.Ui()
         server?.clearAllAudio()
         _groups.value = GroupsInfo()
+        _score.value = ScoreInfo()
+        server?.onScoreChanged = null
         server?.stop()
         scope?.cancel()
         client = null
@@ -457,6 +466,16 @@ object SessionController {
     fun addGroup(name: String) = groupOp { put("op", "add").put("name", name) }
     fun renameGroup(id: String, name: String) = groupOp { put("op", "rename").put("id", id).put("name", name) }
     fun removeGroup(id: String) = groupOp { put("op", "remove").put("id", id) }
+
+    /** Anfitrião: escolhe a parte da partitura que o grupo [groupId] vê (os clientes do grupo passam a ver na hora). */
+    fun setScorePart(groupId: String, part: Int) {
+        server?.setScorePart(groupId, part)
+    }
+
+    /** Anfitrião: tira a partitura da sessão. */
+    fun clearScore() {
+        server?.clearScore()
+    }
     fun assignDevice(deviceId: String, group: String) = groupOp { put("op", "assign").put("device", deviceId).put("group", group) }
 
     /** Só o anfitrião: volume (0..1) de um grupo inteiro; multiplica o volume de cada aparelho dele. */

@@ -126,24 +126,52 @@ class SessionServer(
     private var scoreId = 0L
     private var scoreRev = 1L
     private val scoreParts = HashMap<String, Int>()
+    private var scorePartNames: List<String> = emptyList()
+
+    /** Chamado (fora de locks) quando a partitura, as partes ou a escolha de um grupo mudam. */
+    @Volatile
+    var onScoreChanged: (() -> Unit)? = null
 
     fun setScore(bytes: ByteArray, name: String) {
+        val names = ScoreParts.names(bytes)
         synchronized(scoreLock) {
             scoreBytes = bytes
             scoreName = name
+            scorePartNames = names
             scoreId++
             scoreParts.clear()
             scoreRev++
         }
+        onScoreChanged?.invoke()
     }
 
     fun clearScore() {
         synchronized(scoreLock) {
             scoreBytes = null
             scoreName = ""
+            scorePartNames = emptyList()
             scoreParts.clear()
             scoreRev++
         }
+        onScoreChanged?.invoke()
+    }
+
+    /** O anfitrião escolhe a parte que o [group] vê. Os clientes percebem em ~1 s (a página consulta /api/score). */
+    fun setScorePart(group: String, part: Int): Boolean {
+        val ok = synchronized(scoreLock) {
+            val limit = if (scorePartNames.isEmpty()) 64 else scorePartNames.size
+            if (scoreBytes != null && groups.exists(group) && part in 0 until limit) {
+                scoreParts[group] = part
+                scoreRev++
+                true
+            } else false
+        }
+        if (ok) onScoreChanged?.invoke()
+        return ok
+    }
+
+    fun scoreInfo(): ScoreInfo = synchronized(scoreLock) {
+        ScoreInfo(if (scoreBytes == null) "" else scoreName, scorePartNames, HashMap(scoreParts))
     }
 
     /** {"rev":N,"file":{"id","name","size"}|null,"parts":{"grupo":índice}} */
@@ -159,13 +187,7 @@ class SessionServer(
         val body = runCatching { JSONObject(req.body) }.getOrNull()
         val group = body?.optString("group").orEmpty()
         val part = body?.optInt("part", -1) ?: -1
-        val ok = synchronized(scoreLock) {
-            if (scoreBytes != null && groups.exists(group) && part in 0..63) {
-                scoreParts[group] = part
-                scoreRev++
-                true
-            } else false
-        }
+        val ok = setScorePart(group, part)
         if (!ok) return respond(out, 400, "{\"error\":\"Grupo ou parte invalidos (importe a partitura antes).\"}", close)
         respond(out, 200, scoreJson(), close)
     }
@@ -443,6 +465,7 @@ class SessionServer(
                 val removed = groups.remove(id)
                 if (removed) {
                     synchronized(scoreLock) { scoreParts.remove(id) }
+                    onScoreChanged?.invoke()
                     hubs.remove(id)?.let { it.onChange = null; it.clear() }
                     audioSseClients.filter { it.group == id }.forEach {
                         runCatching { it.socket.close() }

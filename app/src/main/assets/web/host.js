@@ -110,6 +110,16 @@
         iconButton('stop', 'Parar e voltar ao início', () => api(`/api/audio/cmd?group=${g.id}`, { type: 'stop' }).then(refresh), '', !g.file),
       );
       d.appendChild(r1b);
+      // Parte da partitura que este grupo vê (só aparece depois de importar a partitura).
+      const sc = window.SincronoScoreInfo;
+      if (sc && sc.partNames && sc.partNames.length) {
+        const rp = row();
+        const lp = document.createElement('span'); lp.className = 'muted'; lp.textContent = 'Parte da partitura';
+        const sp = document.createElement('select'); sp.className = 'grow'; sp.setAttribute('aria-label', 'Parte da partitura do grupo ' + g.name);
+        sc.partNames.forEach((n, i) => sp.add(new Option(n, String(i), false, (sc.parts[g.id] || 0) === i)));
+        sp.addEventListener('change', () => window.sincronoScoreSetPart(g.id, Number(sp.value)));
+        rp.append(lp, sp); d.appendChild(rp);
+      }
       const vol = row();
       const lab = document.createElement('span'); lab.className = 'muted'; lab.textContent = 'Volume do grupo';
       const sl = slider('g:' + g.id, mix['g:' + g.id] ?? 1, (v) => api('/api/mix', { device: 'g:' + g.id, level: v })); sl.className = 'grow';
@@ -193,6 +203,8 @@
       if (panel) panel.hidden = true; // servidor sem grupos
     } finally { refreshing = false; }
   }
+
+  document.addEventListener('sincrono-score', () => { if (!busy.size && !document.activeElement?.closest?.('#groups-list')) renderGroups(); });
 
   $('play-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'play' }).then(refresh));
   $('pause-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'pause' }).then(refresh));

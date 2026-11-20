@@ -62,6 +62,7 @@ import com.metronomo.SessionController.BeatInfo
 import com.metronomo.SessionController.UiState
 import com.metronomo.core.MetronomeState
 import com.metronomo.net.GroupInfo
+import com.metronomo.net.ScoreInfo
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.ceil
@@ -467,6 +468,7 @@ private fun GroupsPanel() {
     val info by SessionController.groups.collectAsState()
     val levels by SessionController.mixLevels.collectAsState()
     val calib by SessionController.calibration.collectAsState()
+    val score by SessionController.score.collectAsState()
     var newName by remember { mutableStateOf("") }
     var pickTarget by remember { mutableStateOf("g1") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -488,7 +490,7 @@ private fun GroupsPanel() {
         }
         info.groups.forEach { g ->
             HorizontalDivider(color = Pal.Hairline)
-            GroupRow(g, (levels["g:${g.id}"] ?: 1.0).toFloat(),
+            GroupRow(g, (levels["g:${g.id}"] ?: 1.0).toFloat(), score,
                 onPick = {
                     pickTarget = g.id
                     picker.launch(arrayOf("audio/*"))
@@ -533,7 +535,7 @@ private fun GroupsPanel() {
 }
 
 @Composable
-private fun GroupRow(g: GroupInfo, level: Float, onPick: () -> Unit) {
+private fun GroupRow(g: GroupInfo, level: Float, score: ScoreInfo, onPick: () -> Unit) {
     var editing by remember(g.id) { mutableStateOf(false) }
     var name by remember(g.id) { mutableStateOf(g.name) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -574,6 +576,28 @@ private fun GroupRow(g: GroupInfo, level: Float, onPick: () -> Unit) {
                 },
                 modifier = Modifier.weight(1f),
             ) { Text(if (editing) "Cancelar" else "Renomear") }
+        }
+        // Parte da partitura que este grupo vê (só aparece depois de importar a partitura na aba PARTITURA).
+        if (score.partNames.isNotEmpty()) {
+            var openParts by remember(g.id) { mutableStateOf(false) }
+            val current = (score.parts[g.id] ?: 0).coerceIn(0, score.partNames.size - 1)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Parte da partitura", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Box {
+                    FilledTonalButton(onClick = { openParts = true }) { Text(score.partNames[current]) }
+                    DropdownMenu(expanded = openParts, onDismissRequest = { openParts = false }) {
+                        score.partNames.forEachIndexed { i, n ->
+                            DropdownMenuItem(
+                                text = { Text(n) },
+                                onClick = {
+                                    openParts = false
+                                    SessionController.setScorePart(g.id, i)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TransportButton(Glyph.TO_START, "Voltar ao início", { SessionController.audioToStart(g.id) }, Modifier.weight(1f), enabled = g.file != null)

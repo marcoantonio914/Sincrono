@@ -63,7 +63,7 @@ fun ScoreTab(ui: UiState) {
     Module("Partitura", null) {
         Text(
             "No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). " +
-                "Importe aqui e escolha abaixo a parte que cada grupo vê. Cada músico pode trocar a própria parte no aparelho dele.",
+                "Importe aqui. Depois escolha a parte de cada grupo na aba ÁUDIO, no cartão do grupo: os aparelhos do grupo passam a ver essa parte na hora. Cada músico pode trocar a própria parte no aparelho dele.",
             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
         )
         Button(
