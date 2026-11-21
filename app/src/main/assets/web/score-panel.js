@@ -122,14 +122,22 @@
   let last = '';
   function scoreMs() {
     const a = typeof songState !== 'undefined' ? songState : null;
-    if (a && a.file && a.playing) return songPositionMs();
+    const am = audioMarks();
+    const fromA = (p) => (am ? score.fromAudio(am.marks, am.offset, p) : p);
+    if (a && a.file && a.playing) return fromA(songPositionMs());
     if (typeof state !== 'undefined' && state.playing && state.startAt) {
       const scale = state.bpm / (score.initialBpm || state.bpm);
       return Math.max(0, (serverNow() - state.startAt) * scale);
     }
     if (typeof info.pos === 'number') return info.pos;           // posição escolhida pelo anfitrião na linha do tempo
-    if (a && a.file) { const p = songPositionMs(); if (p) return p; }
+    if (a && a.file) { const p = songPositionMs(); if (p) return fromA(p); }
     return 0;
+  }
+  /** Marcadores de compasso do áudio atual (feitos pelo anfitrião), ou null. */
+  function audioMarks() {
+    const a = typeof songState !== 'undefined' ? songState : null;
+    const m = a && a.file && info.marks ? info.marks[a.file.name] : null;
+    return m && m.marks && m.marks.length ? m : null;
   }
 
   // ---------- linha do tempo do anfitrião: clique num compasso ou arraste o controle; todos veem (cursor e música)
@@ -146,7 +154,8 @@
     const S = realNow() + 2500;
     const scale = state.bpm / (score.initialBpm || state.bpm);
     const jobs = [];
-    if (hasAudio) jobs.push(postQuiet('/api/audio/cmd?group=all', { type: 'seek', positionMs: ms, startAt: S }));
+    const am = audioMarks();
+    if (hasAudio) jobs.push(postQuiet('/api/audio/cmd?group=all', { type: 'seek', positionMs: Math.max(0, am ? score.toAudio(am.marks, am.offset, ms) : ms), startAt: S }));
     if (metroPlaying) jobs.push(postQuiet('/api/command', { type: 'play', bpm: state.bpm, beatsPerBar: state.beatsPerBar, startAt: Math.round(S - ms / scale) }));
     await Promise.all(jobs);
     if (!audioPlaying && !metroPlaying) await postQuiet('/api/score/pos', { ms });
@@ -179,6 +188,50 @@
     });
     window.__scoreSeekLabel = label;
   })();
+
+  // ---------- marcadores de compasso (anfitrião): toca o áudio e toca em COMPASSO no início de cada compasso
+  let marking = null;   // { marks: [ms do áudio], sig }
+  const audioName = () => { const a = typeof songState !== 'undefined' ? songState : null; return a && a.file ? a.file.name : ''; };
+  function marksUi() {
+    const box = $('score-marks'); if (!box) return;
+    box.hidden = !score || !canSeek() || !audioName() || !!marking;
+    const am = audioMarks(), n = score ? score.order.length : 0;
+    setHidden('marks-clear', !am);
+    $('marks-status').textContent = am ? 'Marcadores: ' + am.marks.length + ' de ' + n + ' compassos' : (audioName() ? 'Sem marcadores: o cursor segue o andamento escrito.' : '');
+    const bar = $('marks-bar'); if (bar) bar.hidden = !marking;
+    if (marking) $('marks-tap').textContent = 'COMPASSO ' + (marking.marks.length + 1) + ' de ' + n;
+  }
+  setInterval(marksUi, 500);
+  on('marks-start', 'click', () => {
+    const a = typeof songState !== 'undefined' ? songState : null;
+    if (!a || !a.file) { msg('Carregue o áudio na aba Música.'); return; }
+    marking = { marks: [], sig: a.file.name }; marksUi();
+    msg('Toque o áudio desde o início e toque em COMPASSO no início de cada compasso.');
+  });
+  function tap() {
+    if (!marking || !score) return;
+    const a = typeof songState !== 'undefined' ? songState : null;
+    if (!a || !a.playing) { msg('O áudio precisa estar tocando para marcar.'); return; }
+    if (marking.marks.length >= score.order.length) return;
+    marking.marks.push(songPositionMs());
+    if (view) view.setCursor({ k: marking.marks.length - 1, q: 0 }, true);
+    marksUi();
+  }
+  on('marks-tap', 'click', tap);
+  document.addEventListener('keydown', (e) => { if (marking && (e.key === ' ' || e.key === 'Enter') && !/^(INPUT|BUTTON|TEXTAREA)$/.test(e.target.tagName)) { e.preventDefault(); tap(); } });
+  on('marks-undo', 'click', () => { if (marking) { marking.marks.pop(); marksUi(); } });
+  on('marks-cancel', 'click', () => { marking = null; msg(''); marksUi(); });
+  on('marks-save', 'click', async () => {
+    if (!marking) return;
+    if (!marking.marks.length) { msg('Nenhum compasso marcado.'); return; }
+    const d = Math.max(0, Math.min(500, Number($('marks-delay').value) || 0));
+    const body = { sig: marking.sig, marks: marking.marks.map((x) => Math.round(x)), offset: -d };
+    marking = null;
+    await post('/api/score/marks', body);
+    msg('Marcadores salvos: o cursor agora segue o áudio compasso a compasso.');
+    marksUi();
+  });
+  on('marks-clear', 'click', async () => { if (confirm('Apagar os marcadores deste áudio?')) { await post('/api/score/marks', { sig: audioName(), marks: null }); marksUi(); } });
 
   // ---------- modo palco: só a partitura, tela cheia, tela acesa
   let wake = null;

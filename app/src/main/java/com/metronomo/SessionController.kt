@@ -716,6 +716,7 @@ object SessionController {
             .put("metro", metro)
             .put("audio", pos)
             .put("audioPlaying", _audio.value.playing)
+            .put("audioName", _audio.value.fileName)
             .put("now", ck.nowServerMs())
             .put("beats", s.beatsPerBar)
             .toString()

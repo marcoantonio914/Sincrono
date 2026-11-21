@@ -57,6 +57,18 @@
           <input id="score-seek" class="grow" type="range" min="0" max="1000" value="0" aria-label="Linha do tempo da partitura" title="Arraste para mover a música; todos veem">
           <span id="score-seek-label" class="muted">compasso 1</span>
         </div>
+        <div id="score-marks" class="row" hidden>
+          <button id="marks-start" type="button" title="Toque o áudio e marque o início de cada compasso">Marcar compassos</button>
+          <button id="marks-clear" type="button" hidden>Apagar marcadores</button>
+          <span id="marks-status" class="muted"></span>
+        </div>
+        <div id="marks-bar" class="row" hidden>
+          <button id="marks-tap" type="button" class="primary big grow">COMPASSO</button>
+          <button id="marks-undo" type="button">Desfazer</button>
+          <button id="marks-save" type="button">Salvar</button>
+          <button id="marks-cancel" type="button">Cancelar</button>
+          <label class="muted">Atraso do toque (ms) <input id="marks-delay" type="number" min="0" max="500" value="120" style="width:5em"></label>
+        </div>
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>
       </section>

@@ -1,5 +1,6 @@
 package com.metronomo.net
 
+import kotlin.math.abs
 import android.content.res.AssetManager
 import com.metronomo.audio.AudioHub
 import com.metronomo.calibration.CalibrationHub
@@ -128,6 +129,7 @@ class SessionServer(
     private val scoreParts = HashMap<String, Int>()
     private var scorePartNames: List<String> = emptyList()
     private var scoreMeta: ScoreMeta = ScoreMeta()
+    private val scoreMarks = LinkedHashMap<String, Pair<List<Double>, Double>>() // 'nome:tamanho' do áudio -> (ms de cada compasso, ajuste)
     private var scorePos: Double? = null     // posição (ms da partitura) escolhida pelo anfitrião na linha do tempo
 
     /** Posição da linha do tempo da partitura (null = nenhuma). Não mexe na revisão: os clientes leem em /api/score. */
@@ -147,6 +149,7 @@ class SessionServer(
             scoreId++
             scoreParts.clear()
             scorePos = null
+            scoreMarks.clear()
             scoreRev++
         }
         onScoreChanged?.invoke()
@@ -160,9 +163,23 @@ class SessionServer(
             scoreMeta = ScoreMeta()
             scoreParts.clear()
             scorePos = null
+            scoreMarks.clear()
             scoreRev++
         }
         onScoreChanged?.invoke()
+    }
+
+    /** Marcadores de compasso de um áudio (null apaga). Falso se inválidos. */
+    fun setScoreMarks(sig: String, marks: List<Double>?, offset: Double): Boolean = synchronized(scoreLock) {
+        if (sig.isEmpty() || sig.length > 300) return false
+        if (marks == null) scoreMarks.remove(sig)
+        else {
+            if (marks.isEmpty() || marks.size > 20000 || marks[0] < 0 || abs(offset) > 5000) return false
+            for (i in 1 until marks.size) if (marks[i] < marks[i - 1]) return false
+            scoreMarks[sig] = Pair(marks, offset)
+        }
+        scoreRev++
+        true
     }
 
     /** O anfitrião escolhe a parte que o [group] vê. Os clientes percebem em ~1 s (a página consulta /api/score). */
@@ -189,7 +206,13 @@ class SessionServer(
         val parts = JSONObject()
         scoreParts.forEach { (k, v) -> parts.put(k, v) }
         val file: Any = if (bytes == null) JSONObject.NULL else JSONObject().put("id", scoreId).put("name", scoreName).put("size", bytes.size)
-        JSONObject().put("rev", scoreRev).put("file", file).put("parts", parts).put("pos", scorePos ?: JSONObject.NULL).toString()
+        JSONObject().put("rev", scoreRev).put("file", file).put("parts", parts).put("pos", scorePos ?: JSONObject.NULL).put("marks", marksJson()).toString()
+    }
+
+    private fun marksJson(): JSONObject {
+        val o = JSONObject()
+        scoreMarks.forEach { (sig, v) -> o.put(sig, JSONObject().put("marks", org.json.JSONArray(v.first)).put("offset", v.second)) }
+        return o
     }
 
     private fun handleScorePart(req: Request, out: OutputStream, close: Boolean) {
@@ -382,6 +405,16 @@ class SessionServer(
             }
 
             req.method == "POST" && path == "/api/score/part" -> handleScorePart(req, out, close)
+
+            req.method == "POST" && path == "/api/score/marks" -> {
+                val body = runCatching { JSONObject(req.body) }.getOrNull()
+                val sig = body?.optString("sig").orEmpty()
+                val arr = body?.optJSONArray("marks")
+                val list = arr?.let { a -> List(a.length()) { a.optDouble(it, Double.NaN) } }
+                val ok = body != null && (list == null || list.none { it.isNaN() }) && setScoreMarks(sig, list, body.optDouble("offset", 0.0))
+                if (ok) respond(out, 200, scoreJson(), close)
+                else respond(out, 400, "{\"error\":\"Marcadores invalidos.\"}", close)
+            }
 
             req.method == "POST" && path == "/api/score/pos" -> {
                 val body = runCatching { JSONObject(req.body) }.getOrNull()

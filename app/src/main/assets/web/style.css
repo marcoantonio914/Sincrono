@@ -97,3 +97,5 @@ main > *, .tab > * { min-width: 0; }
 #score.stage #score-view, #score.stage #score-view.pages { height: calc(100vh - 12px); }
 #score-stage-exit { display: none; }
 #score.stage #score-stage-exit { display: block; position: fixed; top: 8px; right: 8px; z-index: 60; opacity: .55; }
+#score-marks[hidden], #marks-bar[hidden] { display: none !important; }
+#score-marks, #marks-bar { align-items: center; gap: 8px; }

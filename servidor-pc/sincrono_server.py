@@ -258,6 +258,7 @@ class Session:
         self.score_rev = 1
         self.score_parts = {}            # grupo -> índice da parte que o grupo vê
         self.score_pos = None            # posição (ms da partitura) escolhida pelo anfitrião na linha do tempo; None = nenhuma
+        self.score_marks = {}            # 'nome:tamanho' do áudio -> {'marks': [ms de cada compasso tocado], 'offset': ms}
         self.devices = {}                # id -> dict(name, seen)
 
     # ---- metrônomo
@@ -315,7 +316,7 @@ class Session:
             f = self.score
             return {"rev": self.score_rev,
                     "file": None if f is None else {"id": f["id"], "name": f["name"], "size": f["size"]},
-                    "parts": dict(self.score_parts), "pos": self.score_pos}
+                    "parts": dict(self.score_parts), "pos": self.score_pos, "marks": dict(self.score_marks)}
 
     def score_set(self, path, name, size):
         with self.lock:
@@ -324,6 +325,7 @@ class Session:
             self.score_next += 1
             self.score_parts = {}
             self.score_pos = None
+            self.score_marks = {}        # os marcadores valem para a partitura anterior
             self.score_rev += 1
         if old:
             try:
@@ -336,6 +338,7 @@ class Session:
             old, self.score = self.score, None
             self.score_parts = {}
             self.score_pos = None
+            self.score_marks = {}
             self.score_rev += 1
         if old:
             try:
@@ -675,6 +678,25 @@ class Handler(BaseHTTPRequestHandler):
                 s.score_pos = None if ms is None else max(0.0, float(ms))
             except (TypeError, ValueError):
                 return self._json(400, {"error": "Posição inválida."})
+            return self._json(200, s.score_json())
+        if path == "/api/score/marks":
+            sig = body.get("sig")
+            if not isinstance(sig, str) or not sig or len(sig) > 300:
+                return self._json(400, {"error": "Áudio inválido."})
+            m = body.get("marks")
+            if m is None:
+                s.score_marks.pop(sig, None)
+            else:
+                try:
+                    m = [round(float(x), 1) for x in m]
+                    off = float(body.get("offset", 0))
+                except (TypeError, ValueError):
+                    return self._json(400, {"error": "Marcadores inválidos."})
+                if not (1 <= len(m) <= 20000) or any(b < a for a, b in zip(m, m[1:])) or m[0] < 0 or abs(off) > 5000:
+                    return self._json(400, {"error": "Marcadores inválidos (devem crescer, e o ajuste fica entre -5 s e 5 s)."})
+                s.score_marks[sig] = {"marks": m, "offset": off}
+            with s.lock:
+                s.score_rev += 1
             return self._json(200, s.score_json())
         if path == "/api/score/part":
             if not s.score_part(body.get("group"), body.get("part")):

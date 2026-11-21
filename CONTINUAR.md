@@ -128,6 +128,14 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - **Testes:** `teste_linha_do_tempo.py` novo; `teste_tocar_junto.py` (startAt absurdo agora = 2 h atrás) e `teste_partitura_app.py` ajustados. Todos passam. Kotlin (ScoreView.kt, SessionController.kt, ScoreParts.kt etc.) NÃO foi compilado: compile no PC.
 - **Ideia pendente (resposta dada ao usuário):** marcadores de compasso para áudio gravado (anfitrião bate na tela no início de cada compasso; tabela compasso→ms por arquivo). Som de piano (SoundFont + FluidSynth no PC) adiado.
 
+## 9c. v17 — marcadores de compasso (timestamp) para áudio gravado (Kotlin NÃO compilado aqui)
+- **Ideia:** o anfitrião toca o áudio e toca em COMPASSO (ou Espaço/Enter) no início de cada compasso; fica uma tabela `marks[k]` = ms do ÁUDIO em que começa o k-ésimo compasso tocado (`score.order[k]`, com repetições). O cursor passa a seguir o áudio compasso a compasso, mesmo com andamento humano.
+- **Servidor (Python e Kotlin):** `/api/score` devolve `marks: {nomeDoAudio: {marks:[ms], offset}}`; `POST /api/score/marks {sig, marks|null, offset}` (valida ordem crescente, ≤20000, |offset|≤5 s); apagados ao trocar/limpar a partitura. A chave é o NOME do arquivo de áudio (o app só conhece o nome: `audioName` no `scoreTick`).
+- **Cliente (score.js / score-panel.js):** `score.fromAudio(marks, offset, audioMs)` e `score.toAudio(marks, offset, scoreMs)` (interpolação linear dentro do compasso; depois do último marcador segue o andamento escrito). `scoreMs()` usa isso quando há marcadores; `seekTo` (linha do tempo) converte partitura→áudio. Controles só do anfitrião: "Marcar compassos", barra COMPASSO/Desfazer/Salvar/Cancelar, "Atraso do toque (ms)" (padrão 120; salvo como offset negativo), "Apagar marcadores".
+- **Testes:** `tools/teste_marcadores.py` (matemática, servidor, fluxo, cliente sem controles). Todos os testes anteriores continuam passando.
+- **Limites / não feito:** detecção automática de batidas (não implementada; seria menos confiável); marcar a partir do meio da música; ajuste fino depois de salvo (hoje se refaz); o fluxo real de toque humano só foi testado com cliques automáticos, não com precisão de palco.
+- **Próximo (acordado com o usuário):** v18 = REPERTÓRIO/playlist: lista de músicas, cada uma com áudio (por grupo), partitura, parte de cada grupo, andamento/compasso e marcadores; botão "Próxima"; exportar/importar; trocar só com a música parada. Som de piano (SoundFont + FluidSynth) segue adiado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -147,3 +155,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v13: **partitura na tela** — leitor MusicXML, desenho SVG com cursor, servidor do PC, página (anfitrião/cliente) e, no app Android, aba PARTITURA do anfitrião e cartão no cliente (WebView). Falta: compilar/testar o Kotlin; marcadores para áudio gravado (v14).
 - v13 (revisão): defeito corrigido — a partitura (SVG largo) esticava as grades CSS `main`/`.tab` (min-width:auto) e, em tela estreita, a página ficava com ~1400 px e o desenho parecia em branco no app; agora `grid-template-columns: minmax(0,1fr)` + `min-width:0` (teste `tools/teste_partitura_app.py`, 330 px). Aba ÁUDIO renomeada MÚSICA; aba PARTITURA removida.
 - v16: desenho de orquestra, andamento automático no Android, linha do tempo do anfitrião, modo palco.
+- v17: marcadores de compasso (timestamp) para áudio gravado.

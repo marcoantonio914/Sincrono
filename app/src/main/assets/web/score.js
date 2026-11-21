@@ -438,6 +438,28 @@
       for (const s of e.segs) if (qq <= s.q1 + 1e-9) return s.ms0 + (qq - s.q0) * 60000 / s.bpm;
       return e.ms1;
     };
+    // Marcadores de compasso: marks[k] = ms do ÁUDIO em que começa o k-ésimo compasso tocado (+ offset de ajuste do toque).
+    const act = (marks, offset) => marks.map((x) => x + (offset || 0));
+    /** ms do áudio -> ms da partitura (interpola dentro de cada compasso; depois do último marcador segue o andamento escrito). */
+    sc.fromAudio = function (marks, offset, a) {
+      const o = sc.order, n = Math.min(marks.length, o.length);
+      if (!n) return a;
+      const A = act(marks, offset);
+      if (a < A[0]) return 0;
+      let lo = 0, hi = n - 1;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (A[mid] <= a) lo = mid; else hi = mid - 1; }
+      if (lo < n - 1) { const f = (a - A[lo]) / Math.max(1, A[lo + 1] - A[lo]); return o[lo].ms0 + f * (o[lo].ms1 - o[lo].ms0); }
+      return Math.min(sc.totalMs, o[lo].ms0 + (a - A[lo]));
+    };
+    /** ms da partitura -> ms do áudio (inverso). */
+    sc.toAudio = function (marks, offset, t) {
+      const o = sc.order, n = Math.min(marks.length, o.length);
+      if (!n) return t;
+      const A = act(marks, offset);
+      const k = Math.min(sc.locate(t).k || 0, n - 1);
+      if (k < n - 1) { const f = (t - o[k].ms0) / Math.max(1, o[k].ms1 - o[k].ms0); return A[k] + f * (A[k + 1] - A[k]); }
+      return A[k] + (t - o[k].ms0);
+    };
     return sc;
   }
 
