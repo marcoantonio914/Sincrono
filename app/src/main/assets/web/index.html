@@ -94,6 +94,20 @@
       </section>
       </div>
       <div class="tab" data-tab="audio" hidden>
+      <section id="setlist" class="offset host-only" aria-label="Repertório">
+        <h2>Repertório</h2>
+        <p class="hint">Prepare cada música uma vez (partitura, áudio de cada grupo, parte de cada grupo, andamento e marcadores) e salve aqui. Depois é só carregar: tudo é trocado de uma vez, para todos. Só troca com tudo parado.</p>
+        <div class="row">
+          <input id="rep-name" class="grow" placeholder="Nome da música (opcional)" maxlength="60">
+          <button id="rep-add" type="button">Salvar a configuração atual como música</button>
+        </div>
+        <ol id="rep-list" class="rep-list"></ol>
+        <div class="row">
+          <button id="rep-prev" type="button">◀ Anterior</button>
+          <button id="rep-next" type="button" class="primary">Próxima ▶</button>
+        </div>
+        <p id="rep-msg" class="hint" aria-live="polite"></p>
+      </section>
       <section id="groups-panel" class="offset host-only" aria-label="Grupos">
         <h2>Grupos de aparelhos: áudio e partitura</h2>
         <p class="hint" id="groups-hint">Cada grupo toca o seu arquivo e vê a sua parte da partitura; todos seguem o mesmo relógio. Carregando…</p>
@@ -198,5 +212,6 @@
     <script src="/score.js"></script>
     <script src="/score-view.js"></script>
     <script src="/score-panel.js"></script>
+    <script src="/repertorio.js"></script>
   </body>
 </html>

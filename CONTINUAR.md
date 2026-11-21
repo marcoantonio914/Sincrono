@@ -136,6 +136,15 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - **Limites / não feito:** detecção automática de batidas (não implementada; seria menos confiável); marcar a partir do meio da música; ajuste fino depois de salvo (hoje se refaz); o fluxo real de toque humano só foi testado com cliques automáticos, não com precisão de palco.
 - **Próximo (acordado com o usuário):** v18 = REPERTÓRIO/playlist: lista de músicas, cada uma com áudio (por grupo), partitura, parte de cada grupo, andamento/compasso e marcadores; botão "Próxima"; exportar/importar; trocar só com a música parada. Som de piano (SoundFont + FluidSynth) segue adiado.
 
+## 9d. v18 — REPERTÓRIO (playlist) (Kotlin NÃO compilado aqui)
+- **Modelo:** "foto" da sessão. O anfitrião prepara uma música (partitura, áudio de cada grupo, parte de cada grupo, andamento/compasso, marcadores) e salva com "Salvar a configuração atual como música"; carregar depois restaura tudo de uma vez para todos. Os arquivos são COPIADOS para `<cache>/repertorio/song-N/` (PC: `~/.sincrono-server/repertorio/`; Android: `filesDir/repertorio/`) com índice `repertorio.json`, então sobrevive a reinícios.
+- **Grupos pelo NOME:** áudio e partes são guardados por nome de grupo; ao carregar, grupos que não existem mais são recriados; grupos que a música não usa ficam sem áudio.
+- **API (igual no PC e no Android):** `GET /api/setlist` → `{songs:[{id,name,score,audios,bpm,beats,marks}], current}`; `POST /api/setlist {op: add|update|rename|remove|move|apply|next|prev, id, name, dir}`. Trocar com algo tocando → 409 "Pare a música e o metrônomo...". Carregar também aplica andamento/compasso (comando `settings`) e limpa `pos`.
+- **PC/web:** `servidor-pc/sincrono_server.py` (`rep_op`, `_rep_snapshot`, `_rep_apply`), `web/repertorio.js` + seção `#setlist` na aba MÚSICA (só anfitrião). **Android:** `net/Setlist.kt`, rota em `SessionServer`, `ui/SetlistCard.kt` na aba Música do anfitrião; `SessionController.setlistJson/setlistOp`.
+- **Testes:** `tools/teste_repertorio.py` (salvar, carregar, grupos recriados, 409, próxima/anterior, mover, renomear, remover, persistência após reiniciar o servidor, página). Todos os outros passam.
+- **Limites / não feito:** exportar/importar repertório como arquivo; trocar música com tudo tocando é recusado (de propósito); "Próxima" não toca sozinha (só carrega); o Kotlin (Setlist.kt, SetlistCard.kt, mudanças em SessionServer/SessionController/AudioHub) NÃO foi compilado.
+- **Adiado:** som de piano (SoundFont + FluidSynth no PC).
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -156,3 +165,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v13 (revisão): defeito corrigido — a partitura (SVG largo) esticava as grades CSS `main`/`.tab` (min-width:auto) e, em tela estreita, a página ficava com ~1400 px e o desenho parecia em branco no app; agora `grid-template-columns: minmax(0,1fr)` + `min-width:0` (teste `tools/teste_partitura_app.py`, 330 px). Aba ÁUDIO renomeada MÚSICA; aba PARTITURA removida.
 - v16: desenho de orquestra, andamento automático no Android, linha do tempo do anfitrião, modo palco.
 - v17: marcadores de compasso (timestamp) para áudio gravado.
+- v18: repertório (playlist) com músicas preparadas.

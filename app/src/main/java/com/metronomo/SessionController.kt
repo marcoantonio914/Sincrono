@@ -178,6 +178,11 @@ object SessionController {
             return
         }
         server = srv
+        srv.setlist = com.metronomo.net.Setlist(
+            srv,
+            File(context.applicationContext.filesDir, "repertorio"),
+            File(context.applicationContext.cacheDir, "audio-host"),
+        ) { srv.onGroupsChanged?.invoke() }
         // Restaura os volumes que este anfitrião tinha definido para cada aparelho.
         val hostPrefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         runCatching {
@@ -703,6 +708,13 @@ object SessionController {
      * "metro" = ms desde o início do metrônomo (negativo na contagem; null se parado),
      * "audio" = posição do áudio sincronizado (null se não há arquivo), "bpm" e o grupo deste aparelho.
      */
+    /** Repertório (anfitrião): lista atual como JSON do servidor, ou null. Pode copiar arquivos: chame fora da thread principal. */
+    fun setlistJson(): JSONObject? = server?.setlist?.json()
+
+    /** Executa uma operação do repertório ({"op": ...}); devolve (status HTTP, resposta). Chame fora da thread principal. */
+    fun setlistOp(body: JSONObject): Pair<Int, JSONObject> = server?.setlist?.op(body)
+        ?: Pair(404, JSONObject().put("error", "Repertório indisponível."))
+
     fun scoreTick(): String {
         val ck = clock ?: return "null"
         val ui = _ui.value

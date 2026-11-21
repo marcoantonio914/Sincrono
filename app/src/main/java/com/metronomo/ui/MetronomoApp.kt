@@ -464,7 +464,10 @@ private fun AudioTab(ui: UiState) {
         AudioSection(ui)
     }
     // O que o grupo toca e o que ele lê são uma coisa só: arquivo de áudio + parte da partitura, no cartão do grupo.
-    if (ui.role == SessionController.Role.HOST) GroupsPanel()
+    if (ui.role == SessionController.Role.HOST) {
+        SetlistCard()
+        GroupsPanel()
+    }
 }
 
 /** Só o anfitrião: cria grupos, escolhe o arquivo de áudio e a parte da partitura de cada um, move aparelhos entre eles e toca todos juntos. */

@@ -209,6 +209,41 @@ class SessionServer(
         JSONObject().put("rev", scoreRev).put("file", file).put("parts", parts).put("pos", scorePos ?: JSONObject.NULL).put("marks", marksJson()).toString()
     }
 
+    /** Foto da partitura da sessão para o repertório (null se não há). */
+    class ScoreSnap(val bytes: ByteArray, val name: String, val parts: Map<String, Int>, val marks: Map<String, Pair<List<Double>, Double>>)
+
+    fun scoreSnapshot(): ScoreSnap? = synchronized(scoreLock) {
+        val b = scoreBytes ?: return null
+        ScoreSnap(b, scoreName, HashMap(scoreParts), LinkedHashMap(scoreMarks))
+    }
+
+    /** Estado atual do metrônomo. */
+    fun metronomeState(): MetronomeState = state
+
+    /** Muda andamento e compasso sem tocar nem parar nada (como o comando "settings"). */
+    fun applySettings(bpm: Double, beats: Int) {
+        if (!(bpm >= MetronomeState.MIN_BPM && bpm <= MetronomeState.MAX_BPM && beats in MetronomeState.MIN_BEATS..MetronomeState.MAX_BEATS)) return
+        val next = synchronized(stateLock) {
+            val updated = state.copy(bpm = bpm, beatsPerBar = beats, revision = state.revision + 1)
+            state = updated
+            updated
+        }
+        pool.execute { broadcastRaw(sseEvent(next)) }
+    }
+
+    /** Repertório (criado pelo controlador do app, que sabe onde guardar os arquivos). */
+    @Volatile
+    var setlist: Setlist? = null
+
+    private fun handleSetlist(req: Request, out: OutputStream, close: Boolean) {
+        val sl = setlist ?: return respond(out, 404, "{\"error\":\"Repertorio indisponivel.\"}", close)
+        if (req.method == "GET") return respond(out, 200, sl.json().toString(), close)
+        val body = runCatching { JSONObject(req.body) }.getOrNull()
+            ?: return respond(out, 400, "{\"error\":\"JSON invalido.\"}", close)
+        val r = sl.op(body)
+        respond(out, r.first, r.second.toString(), close)
+    }
+
     private fun marksJson(): JSONObject {
         val o = JSONObject()
         scoreMarks.forEach { (sig, v) -> o.put(sig, JSONObject().put("marks", org.json.JSONArray(v.first)).put("offset", v.second)) }
@@ -405,6 +440,8 @@ class SessionServer(
             }
 
             req.method == "POST" && path == "/api/score/part" -> handleScorePart(req, out, close)
+
+            (req.method == "GET" || req.method == "POST") && path == "/api/setlist" -> handleSetlist(req, out, close)
 
             req.method == "POST" && path == "/api/score/marks" -> {
                 val body = runCatching { JSONObject(req.body) }.getOrNull()

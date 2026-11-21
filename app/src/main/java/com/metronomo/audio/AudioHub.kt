@@ -86,6 +86,9 @@ class AudioHub(private val nowMs: () -> Double) {
     /** Nome do arquivo atual (null se não há). */
     fun fileName(): String? = synchronized(lock) { file?.name }
 
+    /** O arquivo atual (para o repertório copiar), ou null. */
+    fun fileInfo(): FileInfo? = synchronized(lock) { file }
+
     fun isPlaying(): Boolean = synchronized(lock) { normalize(); playing && stopAt.isNaN() }
 
     fun hasFile(): Boolean = synchronized(lock) { file != null }

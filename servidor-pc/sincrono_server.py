@@ -26,6 +26,7 @@ import json
 import os
 import queue
 import re
+import shutil
 import socket
 import sys
 import threading
@@ -260,6 +261,14 @@ class Session:
         self.score_pos = None            # posição (ms da partitura) escolhida pelo anfitrião na linha do tempo; None = nenhuma
         self.score_marks = {}            # 'nome:tamanho' do áudio -> {'marks': [ms de cada compasso tocado], 'offset': ms}
         self.devices = {}                # id -> dict(name, seen)
+        self.rep_dir = self.cache_dir / "repertorio"      # repertório: músicas preparadas (arquivos copiados + índice)
+        self.rep_dir.mkdir(parents=True, exist_ok=True)
+        self.rep = {"songs": [], "next": 1, "current": None}
+        try:
+            self.rep = json.loads((self.rep_dir / "repertorio.json").read_text("utf-8"))
+        except (OSError, ValueError):
+            pass
+        self.rep_seq = 0
 
     # ---- metrônomo
     def command(self, body):
@@ -433,6 +442,162 @@ class Session:
             return last or (400, {"error": "Nenhum grupo tem arquivo de áudio."})
         return 200, self.groups_json()
 
+    # ---- repertório: cada música guarda partitura, áudio por grupo, parte de cada grupo, andamento e marcadores
+    def _rep_save(self):
+        tmp = self.rep_dir / "repertorio.json.tmp"
+        tmp.write_text(json.dumps(self.rep, ensure_ascii=False), "utf-8")
+        os.replace(tmp, self.rep_dir / "repertorio.json")
+
+    def _fresh(self, prefix):
+        self.rep_seq += 1
+        return self.cache_dir / ("%s-%d-%d.bin" % (prefix, int(time.time() * 1000), self.rep_seq))
+
+    def rep_json(self):
+        with self.lock:
+            songs = []
+            for m in self.rep["songs"]:
+                songs.append({"id": m["id"], "name": m["name"], "score": (m.get("score") or {}).get("name"),
+                              "audios": [{"group": a["group"], "name": a["name"]} for a in m.get("audio", [])],
+                              "bpm": m.get("bpm"), "beats": m.get("beats"), "marks": len(m.get("marks", {}))})
+            return {"songs": songs, "current": self.rep.get("current")}
+
+    def _rep_song(self, sid):
+        for m in self.rep["songs"]:
+            if m["id"] == sid:
+                return m
+        return None
+
+    def _rep_snapshot(self, m):
+        # copia a configuração atual da sessão para a música m (substitui o que ela tinha)
+        d = self.rep_dir / ("song-%d" % m["id"])
+        if d.exists():
+            shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True)
+        m["score"] = None
+        if self.score:
+            shutil.copyfile(self.score["path"], d / "score.bin")
+            m["score"] = {"file": "score.bin", "name": self.score["name"], "size": self.score["size"]}
+        m["audio"] = []
+        for gid, name in self.group_names.items():
+            h = self.hubs.get(gid)
+            f = h.file if h else None
+            if f:
+                fn = "audio-%d.bin" % (len(m["audio"]) + 1)
+                shutil.copyfile(f["path"], d / fn)
+                m["audio"].append({"group": name, "file": fn, "name": f["name"], "mime": f["mime"], "size": f["size"]})
+        m["parts"] = {self.group_names[g]: i for g, i in self.score_parts.items() if g in self.group_names}
+        m["bpm"] = self.state["bpm"]
+        m["beats"] = self.state["beatsPerBar"]
+        m["marks"] = json.loads(json.dumps(self.score_marks))
+
+    def rep_op(self, body):
+        # operações do repertório; devolve (status, resposta)
+        op = body.get("op")
+        if op in ("add", "update"):
+            with self.lock:
+                if op == "add":
+                    name = re.sub(r"[\x00-\x1f]", "", str(body.get("name", ""))).strip()[:60]
+                    if not name:
+                        name = (self.score or {}).get("name", "Música %d" % self.rep["next"])
+                    if len(self.rep["songs"]) >= 200:
+                        return 400, {"error": "Repertório cheio (200 músicas)."}
+                    if not self.score and not any(h.has_file() for h in self.hubs.values()):
+                        return 400, {"error": "Carregue uma partitura ou um áudio antes de salvar a música."}
+                    m = {"id": self.rep["next"], "name": name}
+                    self.rep["next"] += 1
+                    self._rep_snapshot(m)
+                    self.rep["songs"].append(m)
+                else:
+                    m = self._rep_song(body.get("id"))
+                    if m is None:
+                        return 404, {"error": "Música não encontrada."}
+                    self._rep_snapshot(m)
+                self.rep["current"] = m["id"]
+                self._rep_save()
+            return 200, self.rep_json()
+        if op in ("rename", "remove", "move"):
+            with self.lock:
+                m = self._rep_song(body.get("id"))
+                if m is None:
+                    return 404, {"error": "Música não encontrada."}
+                if op == "rename":
+                    name = re.sub(r"[\x00-\x1f]", "", str(body.get("name", ""))).strip()[:60]
+                    if not name:
+                        return 400, {"error": "Nome vazio."}
+                    m["name"] = name
+                elif op == "remove":
+                    self.rep["songs"].remove(m)
+                    shutil.rmtree(self.rep_dir / ("song-%d" % m["id"]), ignore_errors=True)
+                    if self.rep.get("current") == m["id"]:
+                        self.rep["current"] = None
+                else:
+                    i = self.rep["songs"].index(m)
+                    j = i + (-1 if body.get("dir") == -1 else 1)
+                    if 0 <= j < len(self.rep["songs"]):
+                        self.rep["songs"][i], self.rep["songs"][j] = self.rep["songs"][j], self.rep["songs"][i]
+                self._rep_save()
+            return 200, self.rep_json()
+        if op in ("apply", "next", "prev"):
+            with self.lock:
+                songs = self.rep["songs"]
+                if op == "apply":
+                    m = self._rep_song(body.get("id"))
+                else:
+                    if not songs:
+                        return 400, {"error": "O repertório está vazio."}
+                    ids = [x["id"] for x in songs]
+                    cur = self.rep.get("current")
+                    i = ids.index(cur) if cur in ids else (-1 if op == "next" else len(ids))
+                    j = i + (1 if op == "next" else -1)
+                    if not 0 <= j < len(ids):
+                        return 400, {"error": "Não há música %s." % ("depois desta" if op == "next" else "antes desta")}
+                    m = songs[j]
+                if m is None:
+                    return 404, {"error": "Música não encontrada."}
+                if self.state.get("playing") or any(h.is_playing() for h in self.hubs.values()):
+                    return 409, {"error": "Pare a música e o metrônomo antes de trocar de música."}
+                self._rep_apply(m)
+                self.rep["current"] = m["id"]
+                self._rep_save()
+            return 200, self.rep_json()
+        return 400, {"error": "Operação inválida."}
+
+    def _rep_apply(self, m):
+        d = self.rep_dir / ("song-%d" % m["id"])
+        # grupos: pelo NOME; os que não existem mais são recriados
+        ids = {}
+        for gid, name in self.group_names.items():
+            ids.setdefault(name, gid)
+        need = [a["group"] for a in m.get("audio", [])] + list(m.get("parts", {}))
+        for name in need:
+            if name not in ids and len(self.group_names) < MAX_GROUPS:
+                self.group_op({"op": "add", "name": name})
+                ids[name] = "g%d" % (self.group_next - 1)
+        # áudio por grupo: quem não está na música fica sem áudio
+        have = {a["group"]: a for a in m.get("audio", [])}
+        for gid, name in list(self.group_names.items()):
+            h = self.hub(gid)
+            a = have.get(name) if ids.get(name) == gid else None
+            if a and (d / a["file"]).exists():
+                dst = self._fresh("up")
+                shutil.copyfile(d / a["file"], dst)
+                h.set_file(str(dst), a["name"], a.get("mime", "application/octet-stream"), a.get("size", dst.stat().st_size))
+            elif h.has_file():
+                h.clear()
+        # partitura, partes e marcadores
+        sc = m.get("score")
+        if sc and (d / sc["file"]).exists():
+            dst = self._fresh("score")
+            shutil.copyfile(d / sc["file"], dst)
+            self.score_set(str(dst), sc["name"], sc.get("size", dst.stat().st_size))
+            self.score_parts = {ids[n]: i for n, i in m.get("parts", {}).items() if n in ids}
+            self.score_marks = json.loads(json.dumps(m.get("marks", {})))
+            self.score_rev += 1
+        elif self.score:
+            self.score_clear()
+        if m.get("bpm"):
+            self.command({"type": "settings", "bpm": m["bpm"], "beatsPerBar": m.get("beats") or 4})
+
     # ---- volumes
     def mix_json(self):
         with self.lock:
@@ -545,6 +710,8 @@ class Handler(BaseHTTPRequestHandler):
         q = query_of(self.path)
         if path == "/api/state":
             return self._json(200, s.state)
+        if path == "/api/setlist":
+            return self._json(200, s.rep_json())
         if path == "/events":
             fila = queue.Queue()
             with s.lock:
@@ -679,6 +846,9 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 return self._json(400, {"error": "Posição inválida."})
             return self._json(200, s.score_json())
+        if path == "/api/setlist":
+            status, reply = s.rep_op(body)
+            return self._json(status, reply)
         if path == "/api/score/marks":
             sig = body.get("sig")
             if not isinstance(sig, str) or not sig or len(sig) > 300:
