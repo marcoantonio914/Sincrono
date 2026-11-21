@@ -224,10 +224,15 @@
     } catch { /* api já mostrou o erro */ }
     refresh();
   });
+  // Pausar/Parar valem para TUDO o que toca (música e metrônomo), independente das caixas. O áudio para num instante
+  // combinado (1,2 s adiante); o metrônomo é parado junto, para os dois terminarem na mesma hora.
   async function pauseAll(kind) {
     try {
-      if (withAudio()) await api('/api/audio/cmd?group=all', { type: kind });
-      if (withMetro()) { const s = metroSettings(); await api('/api/command', { type: 'pause', bpm: s.bpm, beatsPerBar: s.beatsPerBar }); }
+      const tocando = typeof songState !== 'undefined' && songState && songState.playing;
+      await api('/api/audio/cmd?group=all', { type: kind }, true).catch(() => {});
+      if (tocando) await new Promise((r) => setTimeout(r, 1200));
+      const s = metroSettings();
+      await api('/api/command', { type: 'pause', bpm: s.bpm, beatsPerBar: s.beatsPerBar });
     } catch { /* api já mostrou o erro */ }
     refresh();
   }

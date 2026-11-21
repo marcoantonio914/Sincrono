@@ -73,7 +73,7 @@ try:
         x1 = pg.evaluate("parseFloat(document.querySelector('#score-view .ln').getAttribute('x1'))")
         check("só metrônomo: o cursor da partitura anda", x1 > x0 + 20, (x0, x1))
         pg.click('#tabs [data-go="audio"]')
-        pg.click("#stop-all"); pg.wait_for_timeout(500)
+        pg.click("#stop-all"); pg.wait_for_timeout(2300)
         # 2) metrônomo + áudio: começam no mesmo instante
         pg.check("#with-audio"); pg.check("#with-metro")
         pg.click("#play-all"); pg.wait_for_timeout(700)
@@ -82,13 +82,17 @@ try:
         # estado do metrônomo vem por SSE; lê pela página
         sa = pg.evaluate("state.startAt"); ok_play = pg.evaluate("state.playing")
         check("metrônomo + áudio: o metrônomo toca e começa junto com o áudio (dif. %.0f ms)" % abs(sa - st["startAt"]), ok_play and abs(sa - st["startAt"]) < 5, (sa, st.get("startAt")))
-        pg.click("#stop-all"); pg.wait_for_timeout(600)
-        check("parar: metrônomo parou", not pg.evaluate("state.playing"))
+        pg.uncheck("#with-metro")    # mesmo desmarcado, Parar todos tem de parar o metrônomo
+        pg.click("#stop-all"); pg.wait_for_timeout(2300)
+        au = api("/api/audio?group=g1")
+        check("parar: metrônomo parou (mesmo com a caixa desmarcada)", not pg.evaluate("state.playing"))
+        check("parar: áudio parou e voltou ao início", not au.get("playing") and au.get("positionMs", 1) == 0, au)
         # 3) só áudio continua como antes
         pg.uncheck("#with-metro"); pg.check("#with-audio")
         pg.click("#play-all"); pg.wait_for_timeout(600)
         check("só áudio: metrônomo continua parado", not pg.evaluate("state.playing") and api("/api/audio?group=g1").get("playing"))
-        pg.click("#stop-all"); pg.wait_for_timeout(400)
+        pg.click("#stop-all"); pg.wait_for_timeout(2300)
+        check("só áudio: parar deixa tudo parado", not api("/api/audio?group=g1").get("playing") and not pg.evaluate("state.playing"))
         check("sem erros de JavaScript", not erros, erros)
         b.close()
 finally:

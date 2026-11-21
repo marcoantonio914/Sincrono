@@ -529,8 +529,8 @@ private fun GroupsPanel() {
                 Glyph.PLAY, "Tocar todos", { SessionController.playTogether(withMetro, withAudio) }, Modifier.weight(1f),
                 enabled = withMetro || withAudio, primary = true,
             )
-            TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.pauseTogether(withMetro, withAudio, false) }, Modifier.weight(1f))
-            TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(withMetro, withAudio, true) }, Modifier.weight(1f))
+            TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.pauseTogether(false) }, Modifier.weight(1f))
+            TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(true) }, Modifier.weight(1f))
         }
         info.groups.forEach { g ->
             HorizontalDivider(color = Pal.Hairline)

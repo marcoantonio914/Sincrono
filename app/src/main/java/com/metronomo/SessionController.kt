@@ -554,14 +554,20 @@ object SessionController {
         }
     }
 
-    /** Pausa (ou, com [stop], para e volta ao início) o que o anfitrião escolheu: metrônomo e/ou áudio de todos. */
-    fun pauseTogether(metronome: Boolean, audio: Boolean, stop: Boolean) {
+    /**
+     * Pausa (ou, com [stop], para e volta ao início) TUDO o que está tocando: música e metrônomo, não importa o que
+     * esteja marcado nas caixas. O áudio para num instante combinado (AUDIO_STOP_MS adiante); o clique é parado junto
+     * com ele, para os dois terminarem na mesma hora.
+     */
+    fun pauseTogether(stop: Boolean) {
         val c = client
         val pb = audioPlayback
         scope?.launch {
             var error: String? = null
-            if (audio && pb != null) error = pb.command(if (stop) "stop" else "pause", null, "all")
-            if (error == null && metronome && c != null) {
+            val audioTocando = _audio.value.playing
+            if (pb != null) error = pb.command(if (stop) "stop" else "pause", null, "all")
+            if (error == null && c != null) {
+                if (audioTocando) kotlinx.coroutines.delay(1200)
                 val m = _ui.value.metronome
                 error = c.sendCommand("pause", Math.round(m.bpm).toInt(), m.beatsPerBar)
             }
