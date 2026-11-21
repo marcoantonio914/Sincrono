@@ -500,6 +500,14 @@ private fun GroupsPanel() {
             FilledTonalButton(onClick = { scorePicker.launch(arrayOf("*/*")) }) { Text(if (score.fileName.isEmpty()) "Importar" else "Trocar") }
             if (score.fileName.isNotEmpty()) OutlinedButton(onClick = { SessionController.clearScore() }) { Text("Remover", color = Pal.Bad) }
         }
+        if (score.fileName.isNotEmpty()) {
+            OutlinedButton(onClick = { SessionController.applyScoreTempo() }, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    if (score.bpm > 0) "Metrônomo = partitura (${if (score.bpmEstimated) "~" else ""}${Math.round(score.bpm)} bpm, ${if (score.beats > 0) score.beats else "?"} tempos)"
+                    else "Metrônomo = partitura",
+                )
+            }
+        }
         if (score.fileName.isEmpty()) {
             Text(
                 "No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Depois de importar, cada grupo ganha a opção \"Parte da partitura\".",

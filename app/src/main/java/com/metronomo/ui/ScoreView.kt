@@ -3,6 +3,8 @@ package com.metronomo.ui
 import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -10,7 +12,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -27,17 +31,18 @@ import kotlinx.coroutines.delay
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun ScoreWebView(baseUrl: String, height: Dp, modifier: Modifier = Modifier) {
+fun ScoreWebView(baseUrl: String, height: Dp, host: Boolean = false, stage: Boolean = false, modifier: Modifier = Modifier) {
     val ref = remember { arrayOfNulls<WebView>(1) }
     AndroidView(
-        modifier = modifier.fillMaxWidth().height(height),
+        modifier = if (stage) modifier.fillMaxSize() else modifier.fillMaxWidth().height(height),
         factory = { ctx ->
             WebView(ctx).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true // guarda a parte escolhida por este aparelho
                 settings.mediaPlaybackRequiresUserGesture = true
                 webViewClient = WebViewClient()
-                loadUrl("$baseUrl/score.html")
+                keepScreenOn = stage // modo palco: a tela não apaga
+                loadUrl("$baseUrl/score.html?" + (if (host) "host=1&" else "") + (if (stage) "stage=1" else ""))
                 ref[0] = this
             }
         },
@@ -56,8 +61,26 @@ fun ScoreWebView(baseUrl: String, height: Dp, modifier: Modifier = Modifier) {
 fun ScoreCard(ui: UiState) {
     val file by SessionController.scoreFile.collectAsState()
     if (ui.baseUrl.isNotEmpty() && file.isNotEmpty()) {
+        val isHost = ui.role == SessionController.Role.HOST
+        var stage by remember { mutableStateOf(false) }
         Module("Partitura", null) {
-            ScoreWebView(ui.baseUrl, height = 380.dp)
+            ScoreWebView(ui.baseUrl, height = 380.dp, host = isHost)
+            androidx.compose.material3.TextButton(onClick = { stage = true }) { androidx.compose.material3.Text("Modo palco (tela cheia)") }
+        }
+        if (stage) {
+            // Tela cheia só com a partitura, fonte maior, tela sempre acesa; "Voltar" ou o botão do celular sai.
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { stage = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+            ) {
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White)) {
+                    ScoreWebView(ui.baseUrl, height = 0.dp, host = isHost, stage = true)
+                    androidx.compose.material3.TextButton(
+                        onClick = { stage = false },
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd),
+                    ) { androidx.compose.material3.Text("Sair do palco") }
+                }
+            }
         }
     }
 }

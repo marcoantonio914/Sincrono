@@ -127,6 +127,11 @@ class SessionServer(
     private var scoreRev = 1L
     private val scoreParts = HashMap<String, Int>()
     private var scorePartNames: List<String> = emptyList()
+    private var scoreMeta: ScoreMeta = ScoreMeta()
+    private var scorePos: Double? = null     // posição (ms da partitura) escolhida pelo anfitrião na linha do tempo
+
+    /** Posição da linha do tempo da partitura (null = nenhuma). Não mexe na revisão: os clientes leem em /api/score. */
+    fun setScorePos(ms: Double?) = synchronized(scoreLock) { scorePos = ms?.coerceAtLeast(0.0) }
 
     /** Chamado (fora de locks) quando a partitura, as partes ou a escolha de um grupo mudam. */
     @Volatile
@@ -138,8 +143,10 @@ class SessionServer(
             scoreBytes = bytes
             scoreName = name
             scorePartNames = names
+            scoreMeta = ScoreParts.meta(bytes)
             scoreId++
             scoreParts.clear()
+            scorePos = null
             scoreRev++
         }
         onScoreChanged?.invoke()
@@ -150,7 +157,9 @@ class SessionServer(
             scoreBytes = null
             scoreName = ""
             scorePartNames = emptyList()
+            scoreMeta = ScoreMeta()
             scoreParts.clear()
+            scorePos = null
             scoreRev++
         }
         onScoreChanged?.invoke()
@@ -171,7 +180,7 @@ class SessionServer(
     }
 
     fun scoreInfo(): ScoreInfo = synchronized(scoreLock) {
-        ScoreInfo(if (scoreBytes == null) "" else scoreName, scorePartNames, HashMap(scoreParts))
+        ScoreInfo(if (scoreBytes == null) "" else scoreName, scorePartNames, HashMap(scoreParts), scoreMeta.bpm, scoreMeta.beats, scoreMeta.estimated)
     }
 
     /** {"rev":N,"file":{"id","name","size"}|null,"parts":{"grupo":índice}} */
@@ -180,7 +189,7 @@ class SessionServer(
         val parts = JSONObject()
         scoreParts.forEach { (k, v) -> parts.put(k, v) }
         val file: Any = if (bytes == null) JSONObject.NULL else JSONObject().put("id", scoreId).put("name", scoreName).put("size", bytes.size)
-        JSONObject().put("rev", scoreRev).put("file", file).put("parts", parts).toString()
+        JSONObject().put("rev", scoreRev).put("file", file).put("parts", parts).put("pos", scorePos ?: JSONObject.NULL).toString()
     }
 
     private fun handleScorePart(req: Request, out: OutputStream, close: Boolean) {
@@ -374,6 +383,15 @@ class SessionServer(
 
             req.method == "POST" && path == "/api/score/part" -> handleScorePart(req, out, close)
 
+            req.method == "POST" && path == "/api/score/pos" -> {
+                val body = runCatching { JSONObject(req.body) }.getOrNull()
+                if (body == null) respond(out, 400, "{\"error\":\"JSON invalido.\"}", close)
+                else {
+                    setScorePos(if (body.isNull("ms") || !body.has("ms")) null else body.optDouble("ms", 0.0))
+                    respond(out, 200, scoreJson(), close)
+                }
+            }
+
             path.startsWith("/api/audio") -> handleAudio(req, out, close)
 
             req.method == "GET" && path == "/api/mix" -> respond(out, 200, mix.toJson(), close)
@@ -404,6 +422,9 @@ class SessionServer(
     }
 
     private fun handleAudio(req: Request, out: OutputStream, close: Boolean) {
+        if (req.method == "POST" && req.path.contains("/api/audio/cmd") &&
+            runCatching { JSONObject(req.body).optString("type") }.getOrNull() == "play"
+        ) setScorePos(null)    // ao tocar, o cursor volta a seguir o relógio
         val group = CalibrationHub.parseQuery(req.path)["group"] ?: Groups.DEFAULT_ID
         if (group == "all" && req.method == "POST") {
             // Um comando para todos os grupos com arquivo, com o MESMO instante de início/parada.
@@ -495,6 +516,7 @@ class SessionServer(
         if (type !in listOf("play", "pause", "restart", "settings")) {
             return respond(out, 400, "{\"error\":\"Comando invalido.\"}", close)
         }
+        if (type == "play" || type == "restart") setScorePos(null)
         val bpm = body.optDouble("bpm", Double.NaN)
         val beats = body.optInt("beatsPerBar", -1)
         if (type != "pause") {
@@ -507,7 +529,7 @@ class SessionServer(
             val current = state
             val nowNow = nowMs()
             val wanted = body.optDouble("startAt", Double.NaN)   // início combinado com a música (opcional)
-            val startAt = if (!wanted.isNaN() && wanted >= nowNow - 500.0 && wanted <= nowNow + 15000.0) wanted.toLong() else (nowNow + LEAD_MS).toLong()
+            val startAt = if (!wanted.isNaN() && wanted >= nowNow - 3_600_000.0 && wanted <= nowNow + 15000.0) wanted.toLong() else (nowNow + LEAD_MS).toLong()
             val changed = when (type) {
                 "pause" -> current.copy(playing = false, startAt = startAt)
                 "settings" -> current.copy(

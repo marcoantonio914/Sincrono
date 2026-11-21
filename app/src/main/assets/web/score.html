@@ -11,6 +11,8 @@
       #score { border: 0; padding: 0; background: transparent; }
       #score h2 { display: none; }
       #score-view, #score-view.pages { height: calc(100vh - 118px); min-height: 160px; }
+      body.stage-page #score-view, body.stage-page #score-view.pages { height: calc(100vh - 56px); }
+      body.stage-page #score-info, body.stage-page .row, body.stage-page #score-timeline { display: none !important; }
     </style>
   </head>
   <body>
@@ -23,6 +25,10 @@
           <button id="score-mode" type="button" title="Alternar entre uma linha rolando e páginas">Páginas</button>
           <button id="score-zoom-out" type="button" aria-label="Diminuir" title="Diminuir">A−</button>
           <button id="score-zoom-in" type="button" aria-label="Aumentar" title="Aumentar">A+</button>
+        </div>
+        <div id="score-timeline" class="row" hidden>
+          <input id="score-seek" class="grow" type="range" min="0" max="1000" value="0" aria-label="Linha do tempo da partitura">
+          <span id="score-seek-label" class="muted">compasso 1</span>
         </div>
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>
@@ -44,8 +50,13 @@
         songState = nativeAudio === null ? null : { file: { id: 1 }, playing: !!t.audioPlaying, positionMs: nativeAudio, startAt: 0, stopAt: null };
         const metro = (typeof t.metro === 'number');
         nativeElapsed = metro ? t.metro : 0;
-        state = { playing: metro, bpm: t.bpm || 120, beatsPerBar: 4, startAt: 1, revision: 0 };
+        state = { playing: metro, bpm: t.bpm || 120, beatsPerBar: t.beats || 4, startAt: 1, revision: 0 };
+        if (typeof t.now === 'number') { realNowAt = t.now; realNowStamp = performance.now(); }
       };
+      // relógio REAL do servidor (o serverNow acima é só o tempo do metrônomo): usado pelo anfitrião ao mover a música
+      let realNowAt = 0, realNowStamp = 0;
+      window.sincronoServerNow = () => realNowAt + (performance.now() - realNowStamp);
+      if (/[?&]stage=1/.test(location.search)) document.body.classList.add('stage-page');
       document.body.classList.add('guest');
     </script>
     <script src="/score.js"></script>

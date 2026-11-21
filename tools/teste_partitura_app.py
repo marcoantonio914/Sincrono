@@ -80,7 +80,7 @@ try:
         m.goto(BASE + "/score.html"); m.wait_for_selector("#score-view svg", timeout=6000); m.wait_for_timeout(300)
         dim = m.evaluate("({ page: document.documentElement.scrollWidth, view: document.querySelector('#score-view').clientWidth, svg: parseFloat(document.querySelector('#score-view svg').getAttribute('width')) })")
         check("celular (330 px): a página não fica mais larga que a tela e a partitura rola na caixa", dim["page"] <= 332 and dim["view"] <= 330 and dim["svg"] > dim["view"], dim)
-        check("celular: os controles ficam numa linha só", m.evaluate("(() => { const r = [...document.querySelectorAll('#score .row > *')].map(e => e.getBoundingClientRect().top); return Math.max(...r) - Math.min(...r) < 8; })()"))
+        check("celular: os controles ficam numa linha só", m.evaluate("(() => { const r = [...document.querySelectorAll('#score .row > *')].filter(e => e.offsetParent !== null).map(e => e.getBoundingClientRect().top); return Math.max(...r) - Math.min(...r) < 8; })()"))
         check("sem erros de JavaScript", not erros, erros)
         b.close()
 finally:

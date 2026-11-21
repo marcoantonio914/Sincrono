@@ -51,6 +51,11 @@
           <button id="score-mode" type="button" title="Alternar entre uma linha rolando e páginas">Páginas</button>
           <button id="score-zoom-out" type="button" aria-label="Diminuir" title="Diminuir">A−</button>
           <button id="score-zoom-in" type="button" aria-label="Aumentar" title="Aumentar">A+</button>
+          <button id="score-stage" type="button" title="Modo palco: tela cheia só com a partitura">Palco</button>
+        </div>
+        <div id="score-timeline" class="row" hidden>
+          <input id="score-seek" class="grow" type="range" min="0" max="1000" value="0" aria-label="Linha do tempo da partitura" title="Arraste para mover a música; todos veem">
+          <span id="score-seek-label" class="muted">compasso 1</span>
         </div>
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>

@@ -44,14 +44,14 @@ LEAD_MS = 3000          # antecedência do início do metrônomo
 AUDIO_LEAD_MS = 2500.0  # antecedência do início da música
 
 
-def _wanted_start(body, now, default):
+def _wanted_start(body, now, default, past_ms=500.0):
     """Instante de início pedido pelo anfitrião (startAt, ms do servidor), para o metrônomo e a música
     começarem JUNTOS. Só vale se estiver entre 0,5 s atrás e 15 s à frente; senão usa o padrão."""
     try:
         v = float(body.get("startAt"))
     except (TypeError, ValueError):
         return default
-    return v if now - 500 <= v <= now + 15000 else default
+    return v if now - past_ms <= v <= now + 15000 else default
 AUDIO_STOP_MS = 1200.0  # antecedência da parada agendada
 PEER_TTL_MS = 6000.0
 MAX_GROUPS = 16
@@ -210,7 +210,7 @@ class Hub:
                 target = max(0.0, float(requested or 0.0))
                 self.reset_on_stop = False
                 if self.playing:
-                    self.start_at = now + AUDIO_LEAD_MS
+                    self.start_at = _wanted_start(body, now, now + AUDIO_LEAD_MS)
                     self.position_ms = target
                     self.stop_at = None
                 else:
@@ -257,6 +257,7 @@ class Session:
         self.score_next = 1
         self.score_rev = 1
         self.score_parts = {}            # grupo -> índice da parte que o grupo vê
+        self.score_pos = None            # posição (ms da partitura) escolhida pelo anfitrião na linha do tempo; None = nenhuma
         self.devices = {}                # id -> dict(name, seen)
 
     # ---- metrônomo
@@ -275,7 +276,7 @@ class Session:
                 return 400, {"error": "BPM ou compasso inválido."}
         with self.lock:
             cur = self.state
-            start_at = int(_wanted_start(body, now_ms(), now_ms() + LEAD_MS))
+            start_at = int(_wanted_start(body, now_ms(), now_ms() + LEAD_MS, past_ms=3600000.0))
             nxt = dict(cur)
             if kind == "pause":
                 nxt.update(playing=False, startAt=start_at)
@@ -314,7 +315,7 @@ class Session:
             f = self.score
             return {"rev": self.score_rev,
                     "file": None if f is None else {"id": f["id"], "name": f["name"], "size": f["size"]},
-                    "parts": dict(self.score_parts)}
+                    "parts": dict(self.score_parts), "pos": self.score_pos}
 
     def score_set(self, path, name, size):
         with self.lock:
@@ -322,6 +323,7 @@ class Session:
             self.score = dict(id=self.score_next, name=name, path=path, size=size)
             self.score_next += 1
             self.score_parts = {}
+            self.score_pos = None
             self.score_rev += 1
         if old:
             try:
@@ -333,6 +335,7 @@ class Session:
         with self.lock:
             old, self.score = self.score, None
             self.score_parts = {}
+            self.score_pos = None
             self.score_rev += 1
         if old:
             try:
@@ -666,14 +669,25 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/score/clear":
             s.score_clear()
             return self._json(200, s.score_json())
+        if path == "/api/score/pos":
+            try:
+                ms = body.get("ms")
+                s.score_pos = None if ms is None else max(0.0, float(ms))
+            except (TypeError, ValueError):
+                return self._json(400, {"error": "Posição inválida."})
+            return self._json(200, s.score_json())
         if path == "/api/score/part":
             if not s.score_part(body.get("group"), body.get("part")):
                 return self._json(400, {"error": "Grupo ou parte inválidos (importe a partitura antes)."})
             return self._json(200, s.score_json())
         if path == "/api/command":
+            if body.get("type") in ("play", "restart"):
+                s.score_pos = None           # ao tocar, o cursor volta a seguir o relógio
             status, reply = s.command(body)
             return self._json(status, reply)
         if path == "/api/audio/cmd":
+            if body.get("type") == "play":
+                s.score_pos = None
             gid = q.get("group", DEFAULT_GROUP)
             if gid == "all":
                 status, reply = s.audio_all(body)

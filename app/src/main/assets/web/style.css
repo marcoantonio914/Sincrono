@@ -90,3 +90,10 @@ main > *, .tab > * { min-width: 0; }
 #score .row { flex-wrap: nowrap; }
 #score .row select { flex: 1 1 0; min-width: 0; }
 #score .row button { flex: 0 0 auto; width: auto; min-width: 44px; padding: 4px 10px; }
+#score-timeline[hidden] { display: none !important; }
+#score-timeline { align-items: center; }
+#score.stage { position: fixed; inset: 0; z-index: 50; margin: 0; border-radius: 0; background: var(--bg, #fff); padding: 6px; overflow: auto; }
+#score.stage .row, #score.stage #score-timeline, #score.stage #score-info, #score.stage h2 { display: none !important; }
+#score.stage #score-view, #score.stage #score-view.pages { height: calc(100vh - 12px); }
+#score-stage-exit { display: none; }
+#score.stage #score-stage-exit { display: block; position: fixed; top: 8px; right: 8px; z-index: 60; opacity: .55; }

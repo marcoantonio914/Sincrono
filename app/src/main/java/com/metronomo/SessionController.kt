@@ -675,10 +675,27 @@ object SessionController {
                 }
                 srv.setScore(bytes, name)
                 _ui.update { it.copy(message = null) }
+                // Andamento e compasso da partitura passam para o metrônomo sozinhos (se ele não estiver tocando)
+                if (!_ui.value.metronome.playing) applyScoreTempo(auto = true)
             } catch (e: Exception) {
                 _ui.update { it.copy(message = "Não foi possível ler a partitura: ${e.message}") }
             }
         }
+    }
+
+    /** Ajusta o metrônomo para o andamento e a fórmula de compasso escritos no início da partitura. */
+    fun applyScoreTempo(auto: Boolean = false) {
+        val info = server?.scoreInfo() ?: return
+        // Ao importar, só vale andamento escrito com número. Estimativa por palavra (Andante...) só no botão manual,
+        // porque o áudio exportado do MuseScore sem andamento marcado sai em 120 bpm.
+        if (auto && (info.bpm <= 0.0 || info.bpmEstimated)) return
+        if (info.bpm <= 0.0) {
+            _ui.update { it.copy(message = "A partitura não informa o andamento; ajuste na aba SYNC.") }
+            return
+        }
+        val bpm = Math.round(info.bpm).toInt().coerceIn(30, 300)
+        val beats = (if (info.beats > 0) info.beats else _ui.value.metronome.beatsPerBar).coerceIn(1, 12)
+        sendCommand("settings", bpm, beats)
     }
 
     /**
@@ -699,6 +716,8 @@ object SessionController {
             .put("metro", metro)
             .put("audio", pos)
             .put("audioPlaying", _audio.value.playing)
+            .put("now", ck.nowServerMs())
+            .put("beats", s.beatsPerBar)
             .toString()
     }
 

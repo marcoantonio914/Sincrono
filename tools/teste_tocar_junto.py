@@ -41,8 +41,8 @@ try:
     t = now() + 6000
     r = api("/api/command", {"type": "play", "bpm": 100, "beatsPerBar": 4, "startAt": t})
     check("metrônomo aceita startAt futuro", abs(r["startAt"] - t) < 2, r)
-    r = api("/api/command", {"type": "play", "bpm": 100, "beatsPerBar": 4, "startAt": now() - 60000})
-    check("startAt absurdo (1 min atrás) é ignorado: usa o padrão", r["startAt"] > now() + 1500, r)
+    r = api("/api/command", {"type": "play", "bpm": 100, "beatsPerBar": 4, "startAt": now() - 7200000})
+    check("startAt absurdo (2 h atrás) é ignorado: usa o padrão", r["startAt"] > now() + 1500, r)
     api("/api/command", {"type": "pause", "bpm": 100, "beatsPerBar": 4})
     api("/api/audio/upload?group=g1&name=m.wav", raw=wav(), headers={"X-File-Type": "audio/wav"})
     t = now() + 5000

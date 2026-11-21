@@ -181,7 +181,7 @@ class AudioHub(private val nowMs: () -> Double) {
                 val target = (if (requested.isNaN()) 0.0 else requested).coerceAtLeast(0.0)
                 resetOnStop = false
                 if (playing) {
-                    startAt = now + LEAD_MS
+                    startAt = wantedStart(o, now, now + LEAD_MS)
                     positionMs = target
                     stopAt = Double.NaN
                 } else {

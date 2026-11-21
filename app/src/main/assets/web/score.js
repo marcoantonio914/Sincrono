@@ -80,6 +80,8 @@
 
   function parseDirection(dir, pos, div, m) {
     const place = dir.getAttribute('placement') || '';
+    const dstaff = parseInt(text(dir, 'staff', '1'), 10) || 1;
+    const before = m.dirs.length;
     const off = num(dir, 'offset', 0) / div;
     const q = Math.max(0, pos / div + off);
     for (const dt of kids(dir, 'direction-type')) {
@@ -102,6 +104,13 @@
           }
         } else if (c.tagName === 'wedge') {
           m.dirs.push({ q, kind: 'wedge', type: c.getAttribute('type'), place: place || 'below' });
+        } else if (c.tagName === 'octave-shift') {
+          const sz = parseInt(c.getAttribute('size') || '8', 10) || 8;
+          m.dirs.push({ q, kind: 'octave', type: c.getAttribute('type'), size: sz, place: 'above' });
+        } else if (c.tagName === 'pedal') {
+          m.dirs.push({ q, kind: 'pedal', type: c.getAttribute('type'), place: 'below' });
+        } else if (c.tagName === 'dashes') {
+          m.dirs.push({ q, kind: 'dashes', type: c.getAttribute('type'), place: place || 'above' });
         } else if (c.tagName === 'segno') {
           m.dirs.push({ q, kind: 'segno', place: 'above' });
         } else if (c.tagName === 'coda') {
@@ -109,6 +118,7 @@
         }
       }
     }
+    for (let i = before; i < m.dirs.length; i++) m.dirs[i].staff = dstaff;
     const snd = kid(dir, 'sound');
     if (snd) parseSound(snd, q, m);
   }
@@ -120,6 +130,37 @@
       const v = snd.getAttribute(k);
       if (v) m.sound[k] = v;
     }
+  }
+
+  const KIND = {
+    major: '', minor: 'm', augmented: 'aug', diminished: 'dim', dominant: '7', 'major-seventh': 'maj7', 'minor-seventh': 'm7',
+    'diminished-seventh': 'dim7', 'augmented-seventh': 'aug7', 'half-diminished': 'm7\u266d5', 'major-minor': 'm(maj7)',
+    'major-sixth': '6', 'minor-sixth': 'm6', 'dominant-ninth': '9', 'major-ninth': 'maj9', 'minor-ninth': 'm9',
+    'dominant-11th': '11', 'dominant-13th': '13', 'suspended-second': 'sus2', 'suspended-fourth': 'sus4', power: '5', 'dominant-seventh': '7',
+  };
+  const ALT = { '-2': '\u266d\u266d', '-1': '\u266d', '0': '', '1': '\u266f', '2': '\u266f\u266f' };
+  function harmonyText(h) {
+    const k = kid(h, 'kind');
+    const kindTxt = k ? k.getAttribute('text') : null;
+    const kindName = k ? k.textContent.trim() : '';
+    const rt = kid(h, 'root');
+    // MuseScore guarda análise em algarismos romanos (I, V7...) como kind="none" + text="V7" e raiz oculta (text="")
+    let rootTxt = '';
+    if (rt) {
+      const rs = kid(rt, 'root-step');
+      const ra = rs ? rs.getAttribute('text') : null;
+      rootTxt = ra !== null ? ra : (text(rt, 'root-step', '') + (ALT[String(num(rt, 'root-alter', 0))] || ''));
+    }
+    if (kindName === 'none') return kindTxt ? kindTxt : (rootTxt ? '' : 'N.C.');
+    let suf = kindTxt !== null ? kindTxt : (KIND[kindName] !== undefined ? KIND[kindName] : kindName);
+    let out = rootTxt + suf;
+    for (const d of kids(h, 'degree')) {
+      const v = text(d, 'degree-value', ''), al = ALT[String(num(d, 'degree-alter', 0))] || '', ty = text(d, 'degree-type', 'add');
+      out += (ty === 'subtract' ? '(no ' : '(') + al + v + ')';
+    }
+    const b = kid(h, 'bass');
+    if (b) out += '/' + text(b, 'bass-step', '') + (ALT[String(num(b, 'bass-alter', 0))] || '');
+    return out;
   }
 
   function parsePart(partEl, info) {
@@ -138,6 +179,8 @@
         clefs: null, key: 0, time: null, // estado vigente no começo do compasso
         maxEnd: 0,
       };
+      m.clefs = clefs; m.key = key; m.time = time;      // estado vigente no começo do compasso
+      m.clefChanges = []; m.harm = [];
       let pos = 0, lastStart = 0, lastDur = 0;
       for (const el of me.children) {
         const tag = el.tagName;
@@ -145,21 +188,27 @@
           const dv = num(el, 'divisions', NaN); if (Number.isFinite(dv) && dv > 0) div = dv;
           const st = num(el, 'staves', NaN); if (Number.isFinite(st)) part.staves = Math.max(part.staves, st);
           const cl = kids(el, 'clef');
+          const atStart = pos === 0;
           if (cl.length) {
             const nc = Object.assign({}, clefs);
-            for (const c of cl) nc[parseInt(c.getAttribute('number') || '1', 10)] = { sign: text(c, 'sign', 'G'), line: num(c, 'line', NaN), oct: num(c, 'clef-octave-change', 0) };
-            clefs = nc; m.newClefs = nc;
+            const made = {};
+            for (const c of cl) {
+              const stN = parseInt(c.getAttribute('number') || '1', 10);
+              const def = { sign: text(c, 'sign', 'G'), line: num(c, 'line', NaN), oct: num(c, 'clef-octave-change', 0) };
+              nc[stN] = def; made[stN] = def;
+            }
+            clefs = nc;
+            if (atStart) { m.newClefs = nc; m.clefs = nc; }
+            else for (const k of Object.keys(made)) m.clefChanges.push({ q: pos / div, staff: parseInt(k, 10), clef: made[k] });
           }
           const kf = kid(el, 'key');
-          if (kf) { key = num(kf, 'fifths', 0); m.newKey = key; }
+          if (kf) { key = num(kf, 'fifths', 0); if (atStart) { m.newKey = key; m.key = key; } }
           const ti = kid(el, 'time');
           if (ti) {
             const sym = ti.getAttribute('symbol');
             time = { b: num(ti, 'beats', 4), t: num(ti, 'beat-type', 4), symbol: sym || '' };
-            m.newTime = time;
+            if (atStart) { m.newTime = time; m.time = time; }
           }
-          if (!m.clefs) { m.clefs = clefs; m.key = key; m.time = time; }
-          else { m.clefs = clefs; m.key = key; m.time = time; }
         } else if (tag === 'note') {
           const grace = !!kid(el, 'grace');
           const chord = !!kid(el, 'chord');
@@ -171,9 +220,10 @@
             rest: !!rest, measureRest: rest ? rest.getAttribute('measure') === 'yes' : false, chord, grace,
             type: text(el, 'type', ''), dots: kids(el, 'dot').length,
             stem: text(el, 'stem', ''), accidental: text(el, 'accidental', ''), beams: {}, tie: [], slur: [], tuplet: null, tupletMark: null,
-            staccato: !!(kid(kid(el, 'notations'), 'articulations') && kid(kid(kid(el, 'notations'), 'articulations'), 'staccato')),
-            fermata: !!kid(kid(el, 'notations'), 'fermata'), lyric: '',
+            staccato: false, fermata: false, lyric: '', lyrics: [], marks: [], graceSlash: false,
+            head: text(el, 'notehead', ''), cue: !!kid(el, 'cue'), staffChange: false,
           };
+          if (grace) n.graceSlash = kid(el, 'grace').getAttribute('slash') === 'yes';
           if (rest) {
             const ds = text(rest, 'display-step'); const dov = num(rest, 'display-octave', NaN);
             if (ds && Number.isFinite(dov)) n.pitch = { step: ds, octave: dov, alter: 0, display: true };
@@ -190,8 +240,33 @@
             for (const s of kids(nots, 'slur')) n.slur.push({ num: s.getAttribute('number') || '1', type: s.getAttribute('type') });
             for (const t of kids(nots, 'tuplet')) n.tupletMark = t.getAttribute('type');
           }
-          const ly = kid(el, 'lyric');
-          if (ly) n.lyric = text(ly, 'text', '');
+          if (nots) {
+            const ART = { staccato: 'stac', staccatissimo: 'stacc', tenuto: 'ten', accent: 'acc', 'strong-accent': 'marc', 'detached-legato': 'dleg', spiccato: 'stacc' };
+            const arts = kid(nots, 'articulations');
+            if (arts) for (const a of arts.children) if (ART[a.tagName]) n.marks.push(ART[a.tagName]);
+            const orn = kid(nots, 'ornaments');
+            if (orn) for (const a of orn.children) {
+              if (['trill-mark', 'mordent', 'inverted-mordent', 'turn', 'inverted-turn', 'delayed-turn', 'tremolo', 'shake', 'schleifer'].includes(a.tagName)) {
+                if (a.tagName === 'tremolo') n.marks.push('trem' + (parseInt(a.textContent, 10) || 1)); else n.marks.push(a.tagName);
+              }
+            }
+            const tech = kid(nots, 'technical');
+            if (tech) for (const a of tech.children) {
+              if (a.tagName === 'up-bow') n.marks.push('upbow'); else if (a.tagName === 'down-bow') n.marks.push('downbow');
+              else if (a.tagName === 'harmonic') n.marks.push('harm'); else if (a.tagName === 'open') n.marks.push('open');
+              else if (a.tagName === 'stopped') n.marks.push('stopped'); else if (a.tagName === 'snap-pizzicato') n.marks.push('snap');
+              else if (a.tagName === 'fingering') n.fingering = a.textContent.trim();
+            }
+            const fm = kid(nots, 'fermata');
+            if (fm) { n.fermata = true; n.fermataDown = fm.getAttribute('type') === 'inverted'; }
+            if (kid(nots, 'arpeggiate')) n.marks.push('arp');
+          }
+          n.staccato = n.marks.indexOf('stac') >= 0;
+          for (const ly of kids(el, 'lyric')) {
+            const t = text(ly, 'text', '');
+            if (t) n.lyrics.push({ num: parseInt(ly.getAttribute('number') || '1', 10) || 1, text: t, syl: text(ly, 'syllabic', 'single') });
+          }
+          if (n.lyrics.length) n.lyric = n.lyrics[0].text;
           m.notes.push(n);
           if (!chord) { lastStart = pos; lastDur = durDiv; pos += durDiv; }
           if (!grace) m.maxEnd = Math.max(m.maxEnd, (start + durDiv) / div);
@@ -199,6 +274,10 @@
         } else if (tag === 'backup') { pos -= num(el, 'duration', 0); if (pos < 0) pos = 0; }
         else if (tag === 'forward') { pos += num(el, 'duration', 0); m.maxEnd = Math.max(m.maxEnd, pos / div); }
         else if (tag === 'direction') parseDirection(el, pos, div, m);
+        else if (tag === 'harmony') {
+          const tx = harmonyText(el);
+          if (tx) m.harm.push({ q: Math.max(0, pos / div + num(el, 'offset', 0) / div), text: tx });
+        }
         else if (tag === 'sound') parseSound(el, pos / div, m);
         else if (tag === 'barline') {
           const loc = el.getAttribute('location') || 'right';
@@ -218,7 +297,6 @@
           }
         }
       }
-      if (!m.clefs) { m.clefs = clefs; m.key = key; m.time = time; }
       part.measures.push(m);
     }
     return part;

@@ -118,6 +118,16 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
   4. Detectar fórmula de compasso e andamento: o leitor já expõe `initialBpm`/`initialTime`; falta o app Android usá-los (hoje só a página, botão "Metrônomo = partitura").
   5. Tocar as notas (síntese) — viabilidade respondida ao usuário só em conversa: dá, com um sintetizador simples no próprio aparelho agendado pelo relógio compartilhado; NÃO implementado.
 
+## 9b. v16 — desenho de orquestra, andamento automático no Android, linha do tempo, modo palco (Kotlin NÃO compilado aqui)
+- **Desenho (score.js / score-view.js):** claves de sol, 8vb, fá, dó (alto/tenor), percussão, troca de clave no início E no meio do compasso; armaduras corrigidas por clave (antes a de sustenidos em sol estava errada); dinâmicas por pauta; ornamentos (trinado, mordente, grupeto, tremolo), articulações, arcadas, harmônicos, arpejo, apojaturas, fermata, pedal, 8va, cifras e análise romana, vários versos de letra, harpa (2 pautas) e órgão (3). Gerador de exemplo: `tools/gerar_exemplo_orquestra.py`; teste: `tools/teste_partitura_orquestra.py` (30 checagens) com `docs/exemplos-partitura/K284-2.xml`.
+  - Achado nº 1 do K284 corrigido: as trocas de clave dele são no início do compasso (já estavam certas); o que faltava eram dinâmicas por pauta, ornamentos, apojaturas, cifras e fermata.
+  - Limites conhecidos: inclinação das barras de colcheias, barras entre pautas do piano, compassos de pausa múltiplos, colisões automáticas, 8va entre sistemas aproximado.
+- **Andamento/compasso automáticos no Android:** `ScoreParts.meta()` lê o bpm (sound tempo > metronome > palavra italiana, esta só estimada, marcada "~") e o numerador; ao importar, aplica sozinho se o metrônomo está parado e o andamento é numérico; botão "Metrônomo = partitura".
+- **Linha do tempo do anfitrião:** clique num compasso ou arraste `#score-seek` (só anfitrião; `?host=1` no app). `seekTo(ms)` em `score-panel.js`: áudio `seek` com `startAt`, metrônomo `play` com `startAt` no passado (servidor aceita até 1 h) para manter a contagem, ou `POST /api/score/pos {ms}` se nada toca; `/api/score` devolve `pos`. Cursor: áudio tocando > metrônomo > `pos` > áudio pausado > 0. No app, `scoreTick()` agora envia `now` e `beats`.
+- **Modo palco:** botão `#score-stage` (web, tela cheia + Wake Lock + páginas com fonte maior) e "Modo palco" no cartão do app (Dialog em tela cheia, `keepScreenOn`). Virada de página automática = modo páginas seguindo o cursor.
+- **Testes:** `teste_linha_do_tempo.py` novo; `teste_tocar_junto.py` (startAt absurdo agora = 2 h atrás) e `teste_partitura_app.py` ajustados. Todos passam. Kotlin (ScoreView.kt, SessionController.kt, ScoreParts.kt etc.) NÃO foi compilado: compile no PC.
+- **Ideia pendente (resposta dada ao usuário):** marcadores de compasso para áudio gravado (anfitrião bate na tela no início de cada compasso; tabela compasso→ms por arquivo). Som de piano (SoundFont + FluidSynth no PC) adiado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -136,3 +146,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v12: **parar** agendado e transporte com ícones, tela simples do cliente, apelido do aparelho, renomear grupos, cabo retirado da interface, este documento, estudo da partitura.
 - v13: **partitura na tela** — leitor MusicXML, desenho SVG com cursor, servidor do PC, página (anfitrião/cliente) e, no app Android, aba PARTITURA do anfitrião e cartão no cliente (WebView). Falta: compilar/testar o Kotlin; marcadores para áudio gravado (v14).
 - v13 (revisão): defeito corrigido — a partitura (SVG largo) esticava as grades CSS `main`/`.tab` (min-width:auto) e, em tela estreita, a página ficava com ~1400 px e o desenho parecia em branco no app; agora `grid-template-columns: minmax(0,1fr)` + `min-width:0` (teste `tools/teste_partitura_app.py`, 330 px). Aba ÁUDIO renomeada MÚSICA; aba PARTITURA removida.
+- v16: desenho de orquestra, andamento automático no Android, linha do tempo do anfitrião, modo palco.

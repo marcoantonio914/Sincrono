@@ -8,11 +8,13 @@
   const box = $('score-view');
   const sel = $('score-part');
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
-  let view = null, drawnGroup = '';
+  let view = null, drawnGroup = '', stage = /[?&]stage=1/.test(location.search), seeking = false;
   let mode = 'continuous', zoom = 1;
   try { mode = localStorage.getItem('sincrono.scoreMode') === 'pages' ? 'pages' : 'continuous'; zoom = Number(localStorage.getItem('sincrono.scoreZoom')) || 1; } catch { /* sem armazenamento */ }
   const isGuest = () => document.body.classList.contains('guest');
   const myGroup = () => (typeof songGroup !== 'undefined' ? songGroup : 'g1');
+  const hostParam = /[?&]host=1/.test(location.search);
+  const canSeek = () => hostParam || (!!$('score-file') && !isGuest());
   const msg = (t) => { const e = $('score-msg'); if (e) e.textContent = t || ''; };
   const on = (id, ev, fn) => { const e = $(id); if (e) e.addEventListener(ev, fn); };
   const setHidden = (id, v) => { const e = $(id); if (e) e.hidden = v; };
@@ -47,8 +49,10 @@
     box.classList.toggle('pages', mode === 'pages');
     $('score-mode').textContent = mode === 'pages' ? 'Uma linha' : 'Páginas';
     if (!view) view = new SincronoScore.ScoreView(box, { mode, zoom });
-    view.mode = mode; view.zoom = zoom;
+    view.mode = stage ? 'pages' : mode; view.zoom = stage ? Math.max(zoom, 1.4) : zoom; view.stage = stage;
+    view.onPick = (h) => { if (canSeek()) onPickMeasure(h); };
     view.setScore(score, partIndex());
+    setupTimeline();
     drawnGroup = myGroup();
     last = '';
   }
@@ -109,7 +113,7 @@
       if (!next.file) { score = null; loadedId = 0; box.textContent = ''; view = null; $('score-info').textContent = ''; sel.textContent = ''; publish(); return; }
       if (next.file.id !== loadedId) await loadFile(next.file.id);
       else if (changedPart) { renderSelect(); draw(); }
-      publish(); showInfo();
+      publish(); showInfo(); setupTimeline();
     } catch { /* servidor sem partitura: painel fica escondido */ }
     finally { polling = false; }
   }
@@ -123,13 +127,86 @@
       const scale = state.bpm / (score.initialBpm || state.bpm);
       return Math.max(0, (serverNow() - state.startAt) * scale);
     }
+    if (typeof info.pos === 'number') return info.pos;           // posição escolhida pelo anfitrião na linha do tempo
     if (a && a.file) { const p = songPositionMs(); if (p) return p; }
     return 0;
   }
+
+  // ---------- linha do tempo do anfitrião: clique num compasso ou arraste o controle; todos veem (cursor e música)
+  const realNow = () => (typeof sincronoServerNow === 'function' ? sincronoServerNow() : serverNow());
+  async function postQuiet(path, body) {
+    try { await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); } catch { /* sem conexão */ }
+  }
+  /** Move a música e o metrônomo para [ms] (da partitura). Áudio e metrônomo, se tocando, retomam juntos no mesmo instante. */
+  async function seekTo(ms) {
+    if (!score || !canSeek()) return;
+    const a = typeof songState !== 'undefined' ? songState : null;
+    const hasAudio = !!(a && a.file), audioPlaying = hasAudio && a.playing;
+    const metroPlaying = typeof state !== 'undefined' && !!state.playing;
+    const S = realNow() + 2500;
+    const scale = state.bpm / (score.initialBpm || state.bpm);
+    const jobs = [];
+    if (hasAudio) jobs.push(postQuiet('/api/audio/cmd?group=all', { type: 'seek', positionMs: ms, startAt: S }));
+    if (metroPlaying) jobs.push(postQuiet('/api/command', { type: 'play', bpm: state.bpm, beatsPerBar: state.beatsPerBar, startAt: Math.round(S - ms / scale) }));
+    await Promise.all(jobs);
+    if (!audioPlaying && !metroPlaying) await postQuiet('/api/score/pos', { ms });
+    poll(true);
+  }
+  function onPickMeasure(h) {
+    // repetições: entre as vezes em que o compasso é tocado, escolhe a mais próxima da posição atual
+    const cur = score.locate(scoreMs());
+    let best = -1;
+    for (const o of score.order) if (o.m === h.m && (best < 0 || Math.abs(o.k - (cur.k || 0)) < Math.abs(best - (cur.k || 0)))) best = o.k;
+    if (best < 0) return;
+    seekTo(score.msOf(best, 0));
+  }
+  function setupTimeline() {
+    const t = $('score-timeline'), r = $('score-seek');
+    if (!t || !r || !score) return;
+    t.hidden = !canSeek();
+    r.max = String(Math.max(1, Math.round(score.totalMs)));
+  }
+  (function wireTimeline() {
+    const r = $('score-seek'); if (!r) return;
+    const label = (ms) => { const l = score.locate(ms); const n = l.m !== undefined ? (score.measures[l.m].number || (l.m + 1)) : 1; $('score-seek-label').textContent = 'compasso ' + n; return l; };
+    r.addEventListener('pointerdown', () => { seeking = true; });
+    r.addEventListener('input', () => { if (!score) return; const l = label(Number(r.value)); if (view && l.k !== undefined) view.setCursor({ k: l.k, q: 0 }, true); });
+    r.addEventListener('change', () => {
+      seeking = false;
+      if (!score) return;
+      const l = score.locate(Number(r.value));
+      if (l.k !== undefined) seekTo(score.msOf(l.k, 0));
+    });
+    window.__scoreSeekLabel = label;
+  })();
+
+  // ---------- modo palco: só a partitura, tela cheia, tela acesa
+  let wake = null;
+  async function setStage(on) {
+    stage = on;
+    sec.classList.toggle('stage', on);
+    document.body.classList.toggle('stage-on', on);
+    const b = $('score-stage'); if (b) b.textContent = on ? 'Sair do palco' : 'Palco';
+    try {
+      if (on) { if (document.documentElement.requestFullscreen && !document.fullscreenElement) await document.documentElement.requestFullscreen(); }
+      else if (document.fullscreenElement) await document.exitFullscreen();
+    } catch { /* o navegador pode recusar; o modo palco funciona mesmo assim */ }
+    try {
+      if (on && navigator.wakeLock) wake = await navigator.wakeLock.request('screen');
+      else if (wake) { await wake.release(); wake = null; }
+    } catch { /* tela acesa é opcional */ }
+    draw();
+  }
+  { const x = document.createElement('button'); x.id = 'score-stage-exit'; x.type = 'button'; x.textContent = 'Sair do palco'; sec.appendChild(x); x.addEventListener('click', () => setStage(false)); }
+  on('score-stage', 'click', () => setStage(!stage));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage) setStage(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && stage) setStage(false); });
   setInterval(() => {
     if (!score || !view || sec.hidden) return;
     if (myGroup() !== drawnGroup) { renderSelect(); draw(); }   // o anfitrião moveu este aparelho de grupo
-    const loc = score.locate(scoreMs());
+    const ms = scoreMs();
+    const loc = score.locate(ms);
+    if (!seeking) { const r = $('score-seek'); if (r && !r.hidden !== false && !(r.parentElement && r.parentElement.hidden)) { r.value = String(Math.round(ms)); if (window.__scoreSeekLabel) window.__scoreSeekLabel(ms); } }
     if (loc.k === undefined) return;
     const key = loc.k + ':' + loc.q.toFixed(2);
     if (key === last) return;
