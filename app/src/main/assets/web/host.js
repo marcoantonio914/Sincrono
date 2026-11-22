@@ -10,7 +10,7 @@
   let devices = [];
 
   // ---------- abas ----------
-  const tabs = ['sync', 'audio', 'mixer', 'net'];
+  const tabs = ['sync', 'audio', 'playlist', 'mixer', 'net'];
   function showTab(name) {
     if (!tabs.includes(name)) name = 'sync';
     document.querySelectorAll('.tab').forEach((el) => { el.hidden = el.dataset.tab !== name; });

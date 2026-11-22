@@ -97,7 +97,7 @@ fun MetronomoApp() {
     }
 }
 
-private val TAB_NAMES = listOf("SYNC", "MÚSICA", "MIXER", "REDE")
+private val TAB_NAMES = listOf("SYNC", "MÚSICA", "PLAYLIST", "MIXER", "REDE")
 
 /** Navegação inferior: só texto, o item ativo em tinta escura e com um filete no alto. */
 @Composable
@@ -358,7 +358,8 @@ private fun SessionScreen(ui: UiState, tab: Int) {
                 ScoreCard(ui)
             }
             1 -> AudioTab(ui)
-            2 -> MixerTab(ui)
+            2 -> SetlistCard()
+            3 -> MixerTab(ui)
             else -> NetworkTab(ui)
         }
         ui.message?.let { Text(it, color = Pal.Bad, style = MaterialTheme.typography.bodySmall) }
@@ -464,10 +465,7 @@ private fun AudioTab(ui: UiState) {
         AudioSection(ui)
     }
     // O que o grupo toca e o que ele lê são uma coisa só: arquivo de áudio + parte da partitura, no cartão do grupo.
-    if (ui.role == SessionController.Role.HOST) {
-        SetlistCard()
-        GroupsPanel()
-    }
+    if (ui.role == SessionController.Role.HOST) GroupsPanel()
 }
 
 /** Só o anfitrião: cria grupos, escolhe o arquivo de áudio e a parte da partitura de cada um, move aparelhos entre eles e toca todos juntos. */

@@ -94,22 +94,9 @@
       </section>
       </div>
       <div class="tab" data-tab="audio" hidden>
-      <section id="setlist" class="offset host-only" aria-label="Repertório">
-        <h2>Repertório</h2>
-        <p class="hint">Prepare cada música uma vez (partitura, áudio de cada grupo, parte de cada grupo, andamento e marcadores) e salve aqui. Depois é só carregar: tudo é trocado de uma vez, para todos. Só troca com tudo parado.</p>
-        <div class="row">
-          <input id="rep-name" class="grow" placeholder="Nome da música (opcional)" maxlength="60">
-          <button id="rep-add" type="button">Salvar a configuração atual como música</button>
-        </div>
-        <ol id="rep-list" class="rep-list"></ol>
-        <div class="row">
-          <button id="rep-prev" type="button">◀ Anterior</button>
-          <button id="rep-next" type="button" class="primary">Próxima ▶</button>
-        </div>
-        <p id="rep-msg" class="hint" aria-live="polite"></p>
-      </section>
       <section id="groups-panel" class="offset host-only" aria-label="Grupos">
         <h2>Grupos de aparelhos: áudio e partitura</h2>
+        <p class="hint">Esta aba é para configurar a música de agora. Para guardar várias músicas prontas e trocar entre elas, use a aba PLAYLIST.</p>
         <p class="hint" id="groups-hint">Cada grupo toca o seu arquivo e vê a sua parte da partitura; todos seguem o mesmo relógio. Carregando…</p>
         <div id="score-admin" class="group-score">
           <div class="row">
@@ -137,6 +124,31 @@
           <input id="new-group" class="grow" placeholder="Novo grupo (ex.: Violinos)" maxlength="40">
           <button id="add-group" type="button">Criar grupo</button>
         </div>
+      </section>
+      </div>
+      <div class="tab" data-tab="playlist" hidden>
+      <section id="setlist" class="offset host-only" aria-label="Playlist">
+        <div class="pl-now">
+          <div class="pl-cover" aria-hidden="true">♪</div>
+          <div class="grow">
+            <div class="pl-label" id="pl-label">NENHUMA MÚSICA CARREGADA</div>
+            <div class="pl-title" id="pl-title">Playlist vazia</div>
+            <div class="muted" id="pl-sub">Monte uma música na aba MÚSICA e adicione aqui.</div>
+          </div>
+        </div>
+        <div class="pl-ctrl">
+          <button id="rep-prev" type="button" class="round" aria-label="Música anterior" title="Música anterior"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
+          <button id="pl-play" type="button" class="round big primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+          <button id="pl-stop" type="button" class="round" aria-label="Parar todos" title="Parar todos"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
+          <button id="rep-next" type="button" class="round" aria-label="Próxima música" title="Próxima música"><svg class="ico" aria-hidden="true"><use href="#i-fwd"/></svg></button>
+        </div>
+        <ol id="rep-list" class="pl"></ol>
+        <div class="pl-add">
+          <input id="rep-name" class="grow" placeholder="Nome da música (opcional)" maxlength="60" aria-label="Nome da nova música">
+          <button id="rep-add" type="button" title="Guarda aqui a partitura, os áudios, as partes, o andamento e os marcadores que estão carregados agora">+ Adicionar a música atual</button>
+        </div>
+        <p id="rep-msg" class="hint" aria-live="polite"></p>
+        <p class="hint">Cada música guarda a partitura, o áudio de cada grupo, a parte de cada grupo, o andamento e os marcadores. Só troca de música com tudo parado.</p>
       </section>
       </div>
       <div class="tab" data-tab="mixer" hidden>
@@ -203,6 +215,7 @@
     <nav id="tabs" class="host-only" aria-label="Seções">
       <button type="button" data-go="sync">SYNC</button>
       <button type="button" data-go="audio">MÚSICA</button>
+      <button type="button" data-go="playlist">PLAYLIST</button>
       <button type="button" data-go="mixer">MIXER</button>
       <button type="button" data-go="net">REDE</button>
     </nav>

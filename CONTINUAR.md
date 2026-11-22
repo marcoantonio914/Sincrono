@@ -145,6 +145,12 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - **Limites / não feito:** exportar/importar repertório como arquivo; trocar música com tudo tocando é recusado (de propósito); "Próxima" não toca sozinha (só carrega); o Kotlin (Setlist.kt, SetlistCard.kt, mudanças em SessionServer/SessionController/AudioHub) NÃO foi compilado.
 - **Adiado:** som de piano (SoundFont + FluidSynth no PC).
 
+## 9e. v19 — aba PLAYLIST separada (visual de playlist de áudio) (Kotlin NÃO compilado aqui)
+- Pedido do usuário: o repertório da v18 "não estava legal"; ele quer uma aba separada, igual a uma playlist de áudio, e a aba MÚSICA só para configuração.
+- **Web:** nova aba `PLAYLIST` (ordem: SYNC, MÚSICA, PLAYLIST, MIXER, REDE; `host.js` `tabs`, `#tabs` com 5 colunas). Cartão escuro "CARREGADA AGORA" (nome + chips), controles redondos (anterior, tocar, parar, próxima: `#pl-play`/`#pl-stop` clicam em `#play-all`/`#stop-all`, então usam as caixas Metrônomo/Áudio da aba MÚSICA), lista numerada com chips (partitura, N áudios, bpm, marcadores), clicar na linha carrega, menu "⋯" (subir, descer, atualizar com o atual, renomear, remover), "+ Adicionar a música atual". `repertorio.js` reescrito (render); a seção `#setlist` saiu da aba MÚSICA (que ganhou só uma dica).
+- **Android:** `TAB_NAMES` com PLAYLIST (índices: 0 SYNC, 1 MÚSICA, 2 PLAYLIST, 3 MIXER, 4 REDE); `ui/SetlistCard.kt` refeito no mesmo estilo (Compose; ▶ chama `playTogether(false, true)`, ■ `pauseTogether(true)`). Backend (API/Setlist.kt) não mudou.
+- **Testes:** `teste_repertorio.py` atualizado (aba playlist, cartão, menu ⋯; tira captura em scratchpad). Todos passam. Kotlin NÃO compilado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -166,3 +172,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v16: desenho de orquestra, andamento automático no Android, linha do tempo do anfitrião, modo palco.
 - v17: marcadores de compasso (timestamp) para áudio gravado.
 - v18: repertório (playlist) com músicas preparadas.
+- v19: aba PLAYLIST separada com visual de playlist.
