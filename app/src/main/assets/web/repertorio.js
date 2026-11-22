@@ -79,6 +79,9 @@
     const n = $('rep-name');
     if (await call({ op: 'add', name: n.value }, 'Música salva no repertório.')) n.value = '';
   });
+  $('rep-new').addEventListener('click', () => {
+    if (confirm('Começar uma nova música? A configuração ao vivo (partitura, áudios, partes) será limpa. A música atual continua na playlist.')) call({ op: 'new' }, 'Pronto: configure a nova música na aba MÚSICA e toque em "+ Adicionar a música atual".');
+  });
   $('rep-next').addEventListener('click', () => call({ op: 'next' }, 'Próxima carregada.'));
   $('rep-prev').addEventListener('click', () => call({ op: 'prev' }, 'Anterior carregada.'));
   const stageBtn = $('pl-stage');

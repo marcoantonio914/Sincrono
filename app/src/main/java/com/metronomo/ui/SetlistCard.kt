@@ -18,6 +18,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -192,6 +193,9 @@ fun SetlistCard() {
             value = newName, onValueChange = { newName = it.take(60) }, singleLine = true,
             label = { Text("Nome da música (opcional)") }, modifier = Modifier.fillMaxWidth(),
         )
+        OutlinedButton(onClick = { run(JSONObject().put("op", "new"), "Pronto: configure a nova música na aba MÚSICA e toque em \"+ Adicionar a música atual\".") }, modifier = Modifier.fillMaxWidth()) {
+            Text("Nova música")
+        }
         Button(onClick = { run(JSONObject().put("op", "add").put("name", newName), "Música adicionada à playlist.") { newName = "" } }, modifier = Modifier.fillMaxWidth()) {
             Text("+ Adicionar a música atual")
         }

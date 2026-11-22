@@ -168,6 +168,16 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - **Modo palco à vista:** (o usuário não o achou) botão grande "Modo palco (tela cheia)" no topo do cartão Partitura (SYNC) e na PLAYLIST, no app e na página (`SessionController.stageOpen`, `StageDialog` no topo da tela; web: `#pl-stage`, `window.sincronoStage`). Esc ou "Sair do palco" fecha.
 - **Testes:** `teste_repertorio.py` (dirty/unsaved, autosave, Salvar agora, restaurar ao reabrir, modo palco), `teste_fim_da_musica.py`, `teste_tocar_junto.py` (agora via PLAYLIST). Todos passam. Kotlin NÃO compilado.
 
+## 9h. v22 — palco com várias linhas, "como na partitura", parte só do anfitrião, botões redondos, Nova música (Kotlin NÃO compilado aqui)
+
+- Visualização da partitura (botão redondo cicla): **Uma linha rolando → Linhas que cabem na tela → Quebras da partitura** (respeita `print new-system|new-page` do MusicXML; sem essas marcas, quebra sozinho). O zoom efetivo diminui se o compasso mais largo não cabe na tela (responsivo).
+- Modo palco tem visualização e zoom próprios (padrão: "partitura", 1.4), guardados em `sincrono.stageMode/stageZoom`. Defeito corrigido: a classe `pages` usava o modo salvo, não o efetivo, e o palco virava uma linha só.
+- Só o anfitrião vê/escolhe a parte; convidados (inclusive o PC como cliente) sempre veem a parte do seu grupo (ignora `sincrono.part` salvo).
+- Botões Modo/A−/A+/Palco redondos (44 px) com ícones; no palco flutuam no canto (web: embaixo à direita; app: em cima à esquerda).
+- **Nova música** (op `new` em `/api/setlist`, Python e Kotlin; botão na aba PLAYLIST): recusa (409) se algo toca; grava o autosave da atual, limpa partitura/marcadores/áudios e solta a música atual (`current=None`), para o autosave não sobrescrever a anterior. Fluxo: PLAYLIST → Nova música → aba MÚSICA configura → "+ Adicionar a música atual".
+- Também: campos BPM/Tempos não estouram em 320 px.
+- Teste novo: `tools/teste_palco_quebras.py`. Kotlin (`Setlist.kt` op `new`, `SetlistCard.kt`) NÃO compilado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -192,3 +202,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v19: aba PLAYLIST separada com visual de playlist.
 - v20: fim da música volta ao 0:00, pausa, botões redondos, renomear no app.
 - v21: ícone, metrônomo no visual da playlist, Tocar único na playlist, configuração que não some, modo palco à vista.
+- v22: palco com várias linhas, visualização "como na partitura", parte só do anfitrião, botões redondos, Nova música.

@@ -611,6 +611,18 @@ class Session:
                 self.rep["current"] = m["id"]
                 self._rep_save()
             return 200, self.rep_json()
+        if op == "new":
+            # "Nova música": limpa a configuração ao vivo e solta a música atual da lista,
+            # para que o autosave não sobrescreva a música anterior
+            with self.lock:
+                if self.state.get("playing") or any(h.is_playing() for h in self.hubs.values()):
+                    return 409, {"error": "Pare a música e o metrônomo antes de começar outra."}
+                self.rep_autosave()
+                self._rep_apply({"id": 0, "audio": [], "parts": {}})
+                self.score_pos = None
+                self.rep["current"] = None
+                self._rep_save()
+            return 200, self.rep_json()
         return 400, {"error": "Operação inválida."}
 
     def _rep_apply(self, m):

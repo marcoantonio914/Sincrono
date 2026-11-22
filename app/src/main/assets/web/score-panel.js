@@ -9,8 +9,26 @@
   const sel = $('score-part');
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
   let view = null, drawnGroup = '', stage = /[?&]stage=1/.test(location.search), seeking = false;
-  let mode = 'continuous', zoom = 1;
-  try { mode = localStorage.getItem('sincrono.scoreMode') === 'pages' ? 'pages' : 'continuous'; zoom = Number(localStorage.getItem('sincrono.scoreZoom')) || 1; } catch { /* sem armazenamento */ }
+  // visualizações: 'continuous' (uma linha rolando), 'pages' (quebra sozinha para caber na tela) e 'score' (respeita as quebras de linha da partitura)
+  const MODES = ['continuous', 'pages', 'score'];
+  const MODE_NAME = { continuous: 'Uma linha rolando', pages: 'Linhas que cabem na tela', score: 'Quebras da partitura' };
+  let mode = 'continuous', zoom = 1, stageMode = 'score', stageZoom = 1.4;
+  try {
+    const m = localStorage.getItem('sincrono.scoreMode'); if (MODES.includes(m)) mode = m;
+    const sm = localStorage.getItem('sincrono.stageMode'); if (MODES.includes(sm)) stageMode = sm;
+    zoom = Number(localStorage.getItem('sincrono.scoreZoom')) || 1;
+    stageZoom = Number(localStorage.getItem('sincrono.stageZoom')) || 1.4;
+  } catch { /* sem armazenamento */ }
+  const curMode = () => (stage ? stageMode : mode);
+  const curZoom = () => (stage ? stageZoom : zoom);
+  const svgIcon = (d) => '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
+  const ICON = {
+    continuous: 'M3 12h18M16 7l5 5-5 5M8 7l-5 5 5 5',
+    pages: 'M4 5h16M4 10h16M4 15h16M4 20h10',
+    score: 'M3 7h18M3 12h18M3 17h18M9 5v14M15 5v14',
+    stage: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
+    exit: 'M6 6l12 12M18 6L6 18',
+  };
   const isGuest = () => document.body.classList.contains('guest');
   const myGroup = () => (typeof songGroup !== 'undefined' ? songGroup : 'g1');
   const hostParam = /[?&]host=1/.test(location.search);
@@ -25,10 +43,11 @@
   const sig = () => (info.file ? info.file.name + ':' + info.file.size : '');
   function partIndex() {
     const n = score ? score.parts.length : 1;
-    let i = override();
+    let i = canSeek() ? override() : null;
     if (i === null || i === undefined) i = info.parts[myGroup()] || 0;
     return Math.min(Math.max(0, i), n - 1);
   }
+  // Só o anfitrião escolhe a parte que vê (cada convidado vê a parte do seu grupo, para ninguém se confundir).
 
   function renderSelect() {
     if (!score) return;
@@ -46,10 +65,14 @@
 
   function draw() {
     if (!score) return;
-    box.classList.toggle('pages', mode === 'pages');
-    $('score-mode').textContent = mode === 'pages' ? 'Uma linha' : 'Páginas';
-    if (!view) view = new SincronoScore.ScoreView(box, { mode, zoom });
-    view.mode = stage ? 'pages' : mode; view.zoom = stage ? Math.max(zoom, 1.4) : zoom; view.stage = stage;
+    const m = curMode();
+    box.classList.toggle('pages', m !== 'continuous');
+    const mb = $('score-mode'); if (mb) { mb.innerHTML = svgIcon(ICON[m]); mb.title = 'Visualização: ' + MODE_NAME[m] + ' (toque para trocar)'; mb.setAttribute('aria-label', mb.title); }
+    const sb = $('score-stage'); if (sb) sb.innerHTML = svgIcon(stage ? ICON.exit : ICON.stage);
+    sel.style.display = canSeek() && !stage ? '' : 'none';
+    if (!view) view = new SincronoScore.ScoreView(box, { mode: m, zoom: curZoom() });
+    window.__scoreView = view;
+    view.mode = m; view.zoom = curZoom(); view.stage = stage;
     view.onPick = (h) => { if (canSeek()) onPickMeasure(h); };
     view.setScore(score, partIndex());
     setupTimeline();
@@ -239,7 +262,6 @@
     stage = on;
     sec.classList.toggle('stage', on);
     document.body.classList.toggle('stage-on', on);
-    const b = $('score-stage'); if (b) b.textContent = on ? 'Sair do palco' : 'Palco';
     try {
       if (on) { if (document.documentElement.requestFullscreen && !document.fullscreenElement) await document.documentElement.requestFullscreen(); }
       else if (document.fullscreenElement) await document.exitFullscreen();
@@ -250,7 +272,6 @@
     } catch { /* tela acesa é opcional */ }
     draw();
   }
-  { const x = document.createElement('button'); x.id = 'score-stage-exit'; x.type = 'button'; x.textContent = 'Sair do palco'; sec.appendChild(x); x.addEventListener('click', () => setStage(false)); }
   on('score-stage', 'click', () => setStage(!stage));
   window.sincronoStage = (v) => setStage(v);   // usado pela aba PLAYLIST
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage) setStage(false); });
@@ -269,12 +290,22 @@
   }, 40);
 
   // ---------- botões
-  on('score-mode', 'click', () => { mode = mode === 'pages' ? 'continuous' : 'pages'; try { localStorage.setItem('sincrono.scoreMode', mode); } catch { /* */ } draw(); });
-  const setZoom = (z) => { zoom = Math.min(2.5, Math.max(0.6, z)); try { localStorage.setItem('sincrono.scoreZoom', String(zoom)); } catch { /* */ } draw(); };
-  on('score-zoom-in', 'click', () => setZoom(zoom + 0.15));
-  on('score-zoom-out', 'click', () => setZoom(zoom - 0.15));
+  on('score-mode', 'click', () => {
+    const next = MODES[(MODES.indexOf(curMode()) + 1) % MODES.length];
+    if (stage) stageMode = next; else mode = next;
+    try { localStorage.setItem(stage ? 'sincrono.stageMode' : 'sincrono.scoreMode', next); } catch { /* */ }
+    draw();
+  });
+  const setZoom = (z) => {
+    const v = Math.min(2.5, Math.max(0.6, z));
+    if (stage) stageZoom = v; else zoom = v;
+    try { localStorage.setItem(stage ? 'sincrono.stageZoom' : 'sincrono.scoreZoom', String(v)); } catch { /* */ }
+    draw();
+  };
+  on('score-zoom-in', 'click', () => setZoom(curZoom() + 0.15));
+  on('score-zoom-out', 'click', () => setZoom(curZoom() - 0.15));
   let rt = null;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (mode === 'pages') draw(); }, 200); });
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (curMode() !== 'continuous') draw(); }, 200); });
   on('score-file', 'change', async (ev) => {
     const f = ev.target.files[0]; if (!f) return;
     msg('Enviando ' + f.name + '…');

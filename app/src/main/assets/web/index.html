@@ -49,10 +49,10 @@
         <h2>Partitura</h2>
         <div class="row">
           <select id="score-part" class="grow" aria-label="Minha parte"></select>
-          <button id="score-mode" type="button" title="Alternar entre uma linha rolando e páginas">Páginas</button>
-          <button id="score-zoom-out" type="button" aria-label="Diminuir" title="Diminuir">A−</button>
-          <button id="score-zoom-in" type="button" aria-label="Aumentar" title="Aumentar">A+</button>
-          <button id="score-stage" type="button" title="Modo palco: tela cheia só com a partitura">Palco</button>
+          <button id="score-mode" type="button" class="rbtn" title="Visualização (toque para trocar)" aria-label="Visualização"></button>
+          <button id="score-zoom-out" type="button" class="rbtn" aria-label="Diminuir" title="Diminuir">A−</button>
+          <button id="score-zoom-in" type="button" class="rbtn" aria-label="Aumentar" title="Aumentar">A+</button>
+          <button id="score-stage" type="button" class="rbtn" title="Modo palco: tela cheia só com a partitura" aria-label="Modo palco"></button>
         </div>
         <div id="score-timeline" class="row" hidden>
           <input id="score-seek" class="grow" type="range" min="0" max="1000" value="0" aria-label="Linha do tempo da partitura" title="Arraste para mover a música; todos veem">
@@ -146,6 +146,7 @@
         <ol id="rep-list" class="pl"></ol>
         <div class="pl-add">
           <input id="rep-name" class="grow" placeholder="Nome da música (opcional)" maxlength="60" aria-label="Nome da nova música">
+          <button id="rep-new" type="button" title="Limpa a configuração ao vivo para montar outra música; a música atual continua na playlist">Nova música</button>
           <button id="rep-add" type="button" title="Guarda aqui a partitura, os áudios, as partes, o andamento e os marcadores que estão carregados agora">+ Adicionar a música atual</button>
         </div>
         <p id="rep-msg" class="hint" aria-live="polite"></p>

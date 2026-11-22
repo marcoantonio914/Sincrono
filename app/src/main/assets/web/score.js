@@ -181,6 +181,7 @@
       };
       m.clefs = clefs; m.key = key; m.time = time;      // estado vigente no começo do compasso
       m.clefChanges = []; m.harm = [];
+      { const pr = kids(me, 'print')[0]; m.newSystem = !!pr && (pr.getAttribute('new-system') === 'yes' || pr.getAttribute('new-page') === 'yes'); }
       let pos = 0, lastStart = 0, lastDur = 0;
       for (const el of me.children) {
         const tag = el.tagName;

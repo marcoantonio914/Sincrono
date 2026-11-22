@@ -259,6 +259,15 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
                 save()
                 Pair(200, json())
             }
+            "new" -> {
+                // "Nova música": limpa a configuração ao vivo e solta a música atual (o autosave não a sobrescreve)
+                if (!nothingPlaying()) return err(409, "Pare a música e o metrônomo antes de começar outra.")
+                autosave()
+                apply(JSONObject().put("id", 0).put("audio", JSONArray()).put("parts", JSONObject()))
+                current = -1
+                save()
+                Pair(200, json())
+            }
             else -> err(400, "Operação inválida.")
         }
     }

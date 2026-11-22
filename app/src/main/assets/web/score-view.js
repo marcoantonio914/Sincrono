@@ -78,7 +78,8 @@
     /** Compasso escrito (e tempo em semínimas dentro dele) sob um ponto da tela; null se não há. */
     hit(clientX, clientY) {
       const r = this.box.getBoundingClientRect();
-      const x = (clientX - r.left + this.box.scrollLeft) / this.zoom, y = (clientY - r.top + this.box.scrollTop) / this.zoom;
+      const zz = this.zEff || this.zoom;
+      const x = (clientX - r.left + this.box.scrollLeft) / zz, y = (clientY - r.top + this.box.scrollTop) / zz;
       for (let i = 0; i < this.geo.length; i++) {
         const g = this.geo[i];
         if (!g) continue;
@@ -146,8 +147,9 @@
       if (!sc) return;
       const part = sc.parts[this.partIdx] || sc.parts[0];
       const nst = Math.max(1, part.staves || 1);
-      const z = this.zoom;
-      const availW = Math.max(240, this.box.clientWidth / z - 24);
+      let z = this.zoom;
+      let availW = Math.max(240, this.box.clientWidth / z - 24);
+      const wrap = this.mode !== 'continuous';        // 'pages' quebra sozinho; 'score' também respeita as quebras de sistema do arquivo
       const lays = sc.measures.map((_, i) => this.layoutMeasure(part, i));
       // espaços verticais: cifras acima da pauta e versos extras de letra pedem mais altura
       let hasHarm = false, maxVerse = 1;
@@ -175,6 +177,14 @@
         return w;
       };
       const leftRep = (i) => (lays[i].cm.repeatStart ? 12 : 0);
+      // responsivo: se o compasso mais largo não cabe na tela neste zoom, diminui o zoom só para este desenho
+      if (wrap) {
+        let need = 0;
+        for (let i = 0; i < lays.length; i++) need = Math.max(need, 26 + prefixW(i) + 12 + leftRep(i) + midChange(i) + Math.max(lays[i].inner, 46) + 10 + 20);
+        const fit = this.box.clientWidth / need;
+        if (z > fit) { z = Math.max(0.45, fit); availW = Math.max(240, this.box.clientWidth / z - 24); }
+      }
+      this.zEff = z;
       this.systems = [];
       let sys = null;
       for (let i = 0; i < lays.length; i++) {
@@ -185,7 +195,7 @@
         L.nat = 12 + leftRep(i) + L.mid + minInner + 10;
         const firstW = prefixW(i);
         if (!sys) sys = { ms: [], pre: firstW, w: firstW };
-        if (this.mode === 'pages' && sys.ms.length && sys.w + L.nat > availW) {
+        if (wrap && sys.ms.length && (sys.w + L.nat > availW || (this.mode === 'score' && L.m.newSystem))) {
           this.systems.push(sys); sys = { ms: [], pre: firstW, w: firstW };
         }
         sys.ms.push(i); sys.w += L.nat;
@@ -200,7 +210,7 @@
       this.systems.forEach((S, si) => {
         const last = si === this.systems.length - 1;
         let extra = 0;
-        if (this.mode === 'pages' && !(last && S.w < availW * 0.6)) extra = Math.max(0, availW - S.w);
+        if (wrap && !(last && S.w < availW * 0.6)) extra = Math.max(0, availW - S.w);
         const innerSum = S.ms.reduce((a, i) => a + lays[i].minInner, 0);
         const y0 = si * sysH + this.topPad;                   // topo da pauta 1
         const staffTop = (st) => y0 + (st - 1) * (STAFF_H + STAFF_GAP);
@@ -251,7 +261,7 @@
       const totalH = this.systems.length * sysH + 10;
       const cursor = '<g class="cur" style="display:none"><rect class="hl" x="0" y="0" width="10" height="10" fill="#ffb300" opacity="0.16"/>' +
         '<line class="ln" x1="0" x2="0" y1="0" y2="10" stroke="#e53935" stroke-width="2.4" stroke-linecap="round"/></g>';
-      const W = this.mode === 'pages' ? Math.max(availW + 24, 240) : totalW;
+      const W = wrap ? Math.max(availW + 24, 240) : totalW;
       this.box.innerHTML = '';
       const svg = document.createElementNS(NS, 'svg');
       svg.setAttribute('xmlns', NS);
@@ -754,7 +764,7 @@
 
     follow(p) {
       if (Date.now() < this.pausedUntil) return;
-      const z = this.zoom, b = this.box;
+      const z = this.zEff || this.zoom, b = this.box;
       if (this.mode === 'continuous') {
         const x = p.x * z, vw = b.clientWidth;
         if (x > b.scrollLeft + vw * 0.72 || x < b.scrollLeft + 10) b.scrollLeft = Math.max(0, x - vw * 0.28);

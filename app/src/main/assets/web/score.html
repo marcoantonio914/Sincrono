@@ -12,7 +12,9 @@
       #score h2 { display: none; }
       #score-view, #score-view.pages { height: calc(100vh - 118px); min-height: 160px; }
       body.stage-page #score-view, body.stage-page #score-view.pages { height: calc(100vh - 56px); }
-      body.stage-page #score-info, body.stage-page .row, body.stage-page #score-timeline { display: none !important; }
+      body.stage-page #score-info, body.stage-page #score-timeline, body.stage-page #score-part, body.stage-page #score-stage { display: none !important; }
+      body.stage-page #score-view, body.stage-page #score-view.pages { height: 100vh; }
+      body.stage-page .row { position: fixed; top: 8px; left: 8px; z-index: 60; display: flex; gap: 8px; }
     </style>
   </head>
   <body>
@@ -22,9 +24,9 @@
         <h2>Partitura</h2>
         <div class="row">
           <select id="score-part" class="grow" aria-label="Minha parte"></select>
-          <button id="score-mode" type="button" title="Alternar entre uma linha rolando e páginas">Páginas</button>
-          <button id="score-zoom-out" type="button" aria-label="Diminuir" title="Diminuir">A−</button>
-          <button id="score-zoom-in" type="button" aria-label="Aumentar" title="Aumentar">A+</button>
+          <button id="score-mode" type="button" class="rbtn" title="Visualização (toque para trocar)" aria-label="Visualização"></button>
+          <button id="score-zoom-out" type="button" class="rbtn" aria-label="Diminuir" title="Diminuir">A−</button>
+          <button id="score-zoom-in" type="button" class="rbtn" aria-label="Aumentar" title="Aumentar">A+</button>
         </div>
         <div id="score-timeline" class="row" hidden>
           <input id="score-seek" class="grow" type="range" min="0" max="1000" value="0" aria-label="Linha do tempo da partitura">
