@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone do Sincrono: as cinco barras de som (o mesmo símbolo da tela inicial do app). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FF000000" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M39.33,46.30 L39.33,61.70"/>
+    <path android:strokeColor="#FF000000" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M46.67,38.60 L46.67,69.40"/>
+    <path android:strokeColor="#FF000000" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M54.00,32.00 L54.00,76.00"/>
+    <path android:strokeColor="#FF000000" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M61.33,41.90 L61.33,66.10"/>
+    <path android:strokeColor="#FF000000" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M68.67,47.40 L68.67,60.60"/>
+</vector>

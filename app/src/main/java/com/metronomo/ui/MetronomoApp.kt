@@ -351,6 +351,7 @@ private fun SessionScreen(ui: UiState, tab: Int) {
             .padding(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        StageDialog(ui)
         StatusModule(ui)
         when (tab) {
             0 -> {
@@ -393,41 +394,46 @@ private fun SyncTab(
 ) {
     val context = LocalContext.current
     val state = ui.metronome
-    Module("Metrônomo", info?.let { if (it.beat == 0) "começa em ${ceil(it.countdownMs / 1000.0).toInt()}" else "${it.beat} / ${state.beatsPerBar}" }) {
-        // Uma bolinha por tempo; a do tempo atual fica cheia.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+    // Cartão escuro, no mesmo visual da playlist: pontos dos tempos, BPM grande, botões redondos.
+    val dim = Color(0xFF9CA3AF)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Pal.Ink).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("METRÔNOMO", style = LabelStyle, color = dim)
+            Text(
+                info?.let { if (it.beat == 0) "começa em ${ceil(it.countdownMs / 1000.0).toInt()}" else "${it.beat} / ${state.beatsPerBar}" } ?: "",
+                style = LabelStyle, color = Color.White,
+            )
+        }
+        // Uma bolinha por tempo; a do tempo atual fica acesa.
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for (i in 1..state.beatsPerBar.coerceAtMost(12)) {
                 val active = info != null && info.beat == i
-                Box(
-                    Modifier
-                        .padding(horizontal = 5.dp)
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(if (active) Pal.Ink else Pal.Recessed),
-                )
+                Box(Modifier.size(14.dp).clip(CircleShape).background(if (active) Color.White else Color(0xFF374151)))
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
-            Text("$bpm", fontSize = 72.sp, fontWeight = FontWeight.Light, style = TabularStyle.copy(fontSize = 72.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp))
-            Text("  BPM", style = LabelStyle, modifier = Modifier.padding(bottom = 14.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("$bpm", color = Color.White, style = TabularStyle.copy(fontSize = 88.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp))
+            Text("  BPM", style = LabelStyle, color = dim, modifier = Modifier.padding(bottom = 18.dp))
         }
-        StepRow(listOf(-5, -1, 1, 5)) { delta -> setBpm((bpm + delta).coerceIn(MetronomeState.MIN_BPM, MetronomeState.MAX_BPM)) }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = { setBeats((beats - 1).coerceIn(MetronomeState.MIN_BEATS, MetronomeState.MAX_BEATS)) }, modifier = Modifier.height(48.dp)) { Text("−1") }
-            Text("$beats tempos por compasso", modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            FilledTonalButton(onClick = { setBeats((beats + 1).coerceIn(MetronomeState.MIN_BEATS, MetronomeState.MAX_BEATS)) }, modifier = Modifier.height(48.dp)) { Text("+1") }
+        StepRow(listOf(-5, -1, 1, 5), dark = true) { delta -> setBpm((bpm + delta).coerceIn(MetronomeState.MIN_BPM, MetronomeState.MAX_BPM)) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            RoundStep("−", true) { setBeats((beats - 1).coerceIn(MetronomeState.MIN_BEATS, MetronomeState.MAX_BEATS)) }
+            Column(Modifier.padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("$beats", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+                Text("TEMPOS POR COMPASSO", style = LabelStyle, color = dim)
+            }
+            RoundStep("+", true) { setBeats((beats + 1).coerceIn(MetronomeState.MIN_BEATS, MetronomeState.MAX_BEATS)) }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             TransportButton(
                 Glyph.PLAY, "Iniciar o metrônomo (se já estiver tocando, recomeça do primeiro tempo)",
-                { SessionController.sendCommand("play", bpm, beats) },
-                Modifier.weight(2f), primary = true,
+                { SessionController.sendCommand("play", bpm, beats) }, primary = true, onDark = true,
             )
-            TransportButton(
-                Glyph.STOP, "Parar o metrônomo",
-                { SessionController.sendCommand("pause", bpm, beats) },
-                Modifier.weight(1f),
-            )
+            TransportButton(Glyph.STOP, "Parar o metrônomo", { SessionController.sendCommand("pause", bpm, beats) }, onDark = true)
         }
     }
 
@@ -445,24 +451,29 @@ private fun SyncTab(
     }
 }
 
+/** Botão redondo de ajuste (−5, +1, ...). [dark]: sobre o cartão escuro. */
 @Composable
-private fun StepRow(steps: List<Int>, onChange: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        steps.forEach { delta ->
-            FilledTonalButton(
-                onClick = { onChange(delta) },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp),
-            ) { Text(if (delta > 0) "+$delta" else "−${-delta}") }
-        }
+private fun RoundStep(label: String, dark: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(52.dp).clip(CircleShape).background(if (dark) Color(0xFF374151) else Pal.Recessed).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = if (dark) Color.White else Pal.Ink, fontWeight = FontWeight.Medium) }
+}
+
+@Composable
+private fun StepRow(steps: List<Int>, dark: Boolean = false, onChange: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally)) {
+        steps.forEach { delta -> RoundStep(if (delta > 0) "+$delta" else "−${-delta}", dark) { onChange(delta) } }
     }
 }
 
 @Composable
 private fun AudioTab(ui: UiState) {
-    Module("Áudio do meu grupo", ui.groupName) {
-        AudioSection(ui)
+    // O anfitrião também está num grupo: o áudio dele é o do cartão do seu grupo, logo abaixo. Só os convidados veem este cartão.
+    if (ui.role != SessionController.Role.HOST) {
+        Module("Áudio do meu grupo", ui.groupName) {
+            AudioSection(ui)
+        }
     }
     // O que o grupo toca e o que ele lê são uma coisa só: arquivo de áudio + parte da partitura, no cartão do grupo.
     if (ui.role == SessionController.Role.HOST) GroupsPanel()
@@ -515,31 +526,6 @@ private fun GroupsPanel() {
                 style = MaterialTheme.typography.bodySmall,
                 color = Pal.Graphite,
             )
-        }
-        Text("Todos os grupos", fontWeight = FontWeight.Medium)
-        // O que o botão Tocar dispara. A partitura segue o áudio, se ele toca; senão segue o metrônomo.
-        var withMetro by rememberSaveable { mutableStateOf(false) }
-        var withAudio by rememberSaveable { mutableStateOf(true) }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Checkbox(checked = withMetro, onCheckedChange = { withMetro = it })
-            Text("Metrônomo", modifier = Modifier.clickable { withMetro = !withMetro })
-            Spacer(Modifier.width(12.dp))
-            Checkbox(checked = withAudio, onCheckedChange = { withAudio = it })
-            Text("Áudio", modifier = Modifier.clickable { withAudio = !withAudio })
-        }
-        Text(
-            "A partitura anda com o áudio; sem áudio, anda com o metrônomo (o andamento é o da aba SYNC).",
-            style = MaterialTheme.typography.bodySmall,
-            color = Pal.Graphite,
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-            TransportButton(Glyph.TO_START, "Voltar todos ao início", { SessionController.audioToStart("all") }, Modifier.weight(1f))
-            TransportButton(
-                Glyph.PLAY, "Tocar todos", { SessionController.playTogether(withMetro, withAudio) }, Modifier.weight(1f),
-                enabled = withMetro || withAudio, primary = true,
-            )
-            TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.pauseTogether(false) }, Modifier.weight(1f))
-            TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(true) }, Modifier.weight(1f))
         }
         info.groups.forEach { g ->
             HorizontalDivider(color = Pal.Hairline)
@@ -995,6 +981,7 @@ private fun GuestScreen(ui: UiState) {
             .padding(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        StageDialog(ui)
         StatusModule(ui)
         MetronomeViewModule(ui, beatInfo)
         AudioViewModule(ui)
@@ -1015,30 +1002,30 @@ private fun GuestScreen(ui: UiState) {
 @Composable
 private fun MetronomeViewModule(ui: UiState, info: BeatInfo?) {
     val state = ui.metronome
-    Module("Metrônomo", info?.let { if (it.beat == 0) "começa em ${ceil(it.countdownMs / 1000.0).toInt()}" else "${it.beat} / ${state.beatsPerBar}" }) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+    // Mesmo cartão escuro do anfitrião, sem botões.
+    val dim = Color(0xFF9CA3AF)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Pal.Ink).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("METRÔNOMO", style = LabelStyle, color = dim)
+            Text(
+                info?.let { if (it.beat == 0) "começa em ${ceil(it.countdownMs / 1000.0).toInt()}" else "${it.beat} / ${state.beatsPerBar}" } ?: if (state.playing) "tocando" else "parado",
+                style = LabelStyle, color = Color.White,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for (i in 1..state.beatsPerBar.coerceAtMost(12)) {
                 val active = info != null && info.beat == i
-                Box(
-                    Modifier
-                        .padding(horizontal = 5.dp)
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(if (active) Pal.Ink else Pal.Recessed),
-                )
+                Box(Modifier.size(14.dp).clip(CircleShape).background(if (active) Color.White else Color(0xFF374151)))
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
-            Text("${state.bpm.roundToInt()}", fontSize = 72.sp, fontWeight = FontWeight.Light, style = TabularStyle.copy(fontSize = 72.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp))
-            Text("  BPM", style = LabelStyle, modifier = Modifier.padding(bottom = 14.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("${state.bpm.roundToInt()}", color = Color.White, style = TabularStyle.copy(fontSize = 88.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp))
+            Text("  BPM", style = LabelStyle, color = dim, modifier = Modifier.padding(bottom = 18.dp))
         }
-        Text(
-            if (state.playing) "Tocando" else "Parado",
-            style = MaterialTheme.typography.bodySmall,
-            color = Pal.Graphite,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

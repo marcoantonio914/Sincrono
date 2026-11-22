@@ -159,6 +159,15 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - **Renomear no app:** menu "⋯" da playlist → "Renomear" → AlertDialog (`op: rename`). A página já tinha.
 - **Testes:** `tools/teste_fim_da_musica.py` (música de 4 s com metrônomo: para sozinha e volta a 0; pausa mantém a posição; tocar centralizado; botões redondos). Todos os testes passam. Kotlin NÃO compilado.
 
+## 9g. v21 — ícone, metrônomo no visual da playlist, Tocar único na playlist, configuração que não some, modo palco à vista (Kotlin NÃO compilado aqui)
+- **Ícone do app:** as 5 barras de som da tela inicial. `res/drawable/ic_launcher_foreground.xml` (+ `_monochrome` para ícones temáticos), `res/mipmap-anydpi-v26/ic_launcher(.round).xml` (adaptativo), cor de fundo `#111827` em `values/ic_launcher_background.xml`, referenciado no `AndroidManifest.xml` (`icon`/`roundIcon`). Página: `web/icon.svg` como favicon. minSdk >= 26 (sem PNGs legados). Se preferir fundo claro com barras escuras, troque a cor e o `strokeColor`.
+- **Metrônomo no visual da playlist:** cartão escuro, pontos dos tempos, BPM grande, botões redondos (−5 −1 +1 +5), tempos por compasso com − e +, play branco/stop cinza. Android: `SyncTab` + `MetronomeViewModule` (convidado, sem botões) + `StepRow`/`RoundStep` redondos também no ajuste fino de latência; `TransportButton(onDark = true)`. Web: `.met-card` em `style.css` (cuidado: `#play` tem regra de ID; a do cartão usa `#play` também).
+- **Playlist assume o Tocar:** saiu o bloco "Todos os grupos" (caixas + 4 botões) da aba MÚSICA (Android e web); as caixas **Metrônomo/Áudio** agora ficam na PLAYLIST e o ▶ delas manda (`SessionController.playWithMetro/playWithAudio`; web: ids `with-metro`, `with-audio`, `play-all`, `pause-all`, `stop-all` agora são os botões da playlist). Anfitrião não vê mais "Áudio do meu grupo" (o áudio dele é o do cartão do grupo dele); convidados continuam vendo.
+- **Configuração não some:** (1) a música carregada guarda sozinha o que for mudado: laço que grava quando a configuração para de mudar por 3 s, só com nada tocando e sessão não vazia; (2) ao abrir o servidor/sessão, volta a última música carregada (PC: `rep_restore`; Android: `Setlist.restoreLast` 2 s depois de abrir, depois de restaurar grupos/volumes); (3) ao sair da sessão (Android) grava antes; (4) `/api/setlist` devolve `dirty` e `unsaved`; a tela mostra faixa amarela ("Alterações ainda não guardadas… Salvar agora" / "Esta configuração ainda não está na playlist…"); `op: "save"`. Impressão digital da configuração: `_rep_fp_live/_rep_fp_song` (Python) e `fpLive/fpSong` (Kotlin). Músicas guardadas antes da v21 não têm o tamanho do áudio: aparecem como alteradas uma vez e são regravadas.
+- **Fim da música / Parar:** inalterado (v20).
+- **Modo palco à vista:** (o usuário não o achou) botão grande "Modo palco (tela cheia)" no topo do cartão Partitura (SYNC) e na PLAYLIST, no app e na página (`SessionController.stageOpen`, `StageDialog` no topo da tela; web: `#pl-stage`, `window.sincronoStage`). Esc ou "Sair do palco" fecha.
+- **Testes:** `teste_repertorio.py` (dirty/unsaved, autosave, Salvar agora, restaurar ao reabrir, modo palco), `teste_fim_da_musica.py`, `teste_tocar_junto.py` (agora via PLAYLIST). Todos passam. Kotlin NÃO compilado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -182,3 +191,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v18: repertório (playlist) com músicas preparadas.
 - v19: aba PLAYLIST separada com visual de playlist.
 - v20: fim da música volta ao 0:00, pausa, botões redondos, renomear no app.
+- v21: ícone, metrônomo no visual da playlist, Tocar único na playlist, configuração que não some, modo palco à vista.

@@ -452,6 +452,52 @@ class Session:
         self.rep_seq += 1
         return self.cache_dir / ("%s-%d-%d.bin" % (prefix, int(time.time() * 1000), self.rep_seq))
 
+    def _rep_fp(self, score, audio, parts, bpm, beats, marks):
+        return json.dumps({"score": score, "audio": sorted(audio), "parts": sorted(parts), "bpm": bpm, "beats": beats, "marks": marks}, sort_keys=True)
+
+    def _rep_fp_live(self):
+        sc = self.score
+        return self._rep_fp(
+            [sc["name"], sc["size"]] if sc else None,
+            [[self.group_names[g], h.file["name"], h.file["size"]] for g, h in self.hubs.items() if h.file and g in self.group_names],
+            [[self.group_names[g], i] for g, i in self.score_parts.items() if g in self.group_names],
+            self.state["bpm"], self.state["beatsPerBar"], self.score_marks)
+
+    def _rep_fp_song(self, m):
+        sc = m.get("score")
+        return self._rep_fp(
+            [sc["name"], sc["size"]] if sc else None,
+            [[a["group"], a["name"], a["size"]] for a in m.get("audio", [])],
+            [[g, i] for g, i in m.get("parts", {}).items()],
+            m.get("bpm"), m.get("beats"), m.get("marks", {}))
+
+    def _rep_has_config(self):
+        return bool(self.score) or any(h.has_file() for h in self.hubs.values())
+
+    def rep_autosave(self, force=False):
+        # a música carregada guarda sozinha o que foi mudado na configuração (nada tocando; ignora sessão vazia)
+        with self.lock:
+            m = self._rep_song(self.rep.get("current"))
+            if m is None or not self._rep_has_config():
+                return False
+            if self.state.get("playing") or any(h.is_playing() for h in self.hubs.values()):
+                return False
+            if self._rep_fp_live() == self._rep_fp_song(m):
+                return False
+            self._rep_snapshot(m)
+            self._rep_save()
+            return True
+
+    def rep_restore(self):
+        # ao abrir o servidor: volta a música que estava carregada
+        with self.lock:
+            m = self._rep_song(self.rep.get("current"))
+            if m is not None and not self._rep_has_config():
+                try:
+                    self._rep_apply(m)
+                except Exception as e:  # um arquivo sumido não pode impedir o servidor de abrir
+                    print("Repertório: não consegui restaurar a última música:", e)
+
     def rep_json(self):
         with self.lock:
             songs = []
@@ -459,7 +505,9 @@ class Session:
                 songs.append({"id": m["id"], "name": m["name"], "score": (m.get("score") or {}).get("name"),
                               "audios": [{"group": a["group"], "name": a["name"]} for a in m.get("audio", [])],
                               "bpm": m.get("bpm"), "beats": m.get("beats"), "marks": len(m.get("marks", {}))})
-            return {"songs": songs, "current": self.rep.get("current")}
+            cur = self._rep_song(self.rep.get("current"))
+            dirty = bool(cur) and self._rep_has_config() and self._rep_fp_live() != self._rep_fp_song(cur)
+            return {"songs": songs, "current": self.rep.get("current"), "dirty": dirty, "unsaved": cur is None and self._rep_has_config()}
 
     def _rep_song(self, sid):
         for m in self.rep["songs"]:
@@ -514,6 +562,9 @@ class Session:
                     self._rep_snapshot(m)
                 self.rep["current"] = m["id"]
                 self._rep_save()
+            return 200, self.rep_json()
+        if op == "save":
+            self.rep_autosave()
             return 200, self.rep_json()
         if op in ("rename", "remove", "move"):
             with self.lock:
@@ -1121,6 +1172,21 @@ def main():
     args = ap.parse_args()
     global CABLE
     SESSION = Session(args.cache)
+    SESSION.rep_restore()
+
+    def _autosave_loop():
+        last = None
+        while True:
+            time.sleep(3)
+            try:
+                with SESSION.lock:
+                    fp = SESSION._rep_fp_live()
+                if fp == last:      # só grava quando a configuração parou de mudar
+                    SESSION.rep_autosave()
+                last = fp
+            except Exception as e:
+                print('Repertório: erro ao guardar sozinho:', e)
+    threading.Thread(target=_autosave_loop, daemon=True).start()
     if calibracao_cabo is not None and calibracao_cabo.np is not None:
         CABLE = calibracao_cabo.CableCalibration(now_ms)
         pass

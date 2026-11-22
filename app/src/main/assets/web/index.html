@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f8f9fa">
     <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="stylesheet" href="/style.css">
     <title>Sincrono</title>
   </head>
@@ -72,16 +73,19 @@
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>
       </section>
+      <section class="met-card" aria-label="Metrônomo">
+        <div class="met-head"><span class="pl-label">METRÔNOMO</span></div>
+        <p id="beat" aria-live="off">—</p>
       <section class="fields host-only" aria-label="Configurações">
         <label>BPM <input id="bpm" type="number" min="30" max="300" value="120" inputmode="numeric"></label>
         <label>Tempos <input id="beats" type="number" min="1" max="12" value="4" inputmode="numeric"></label>
       </section>
-      <p id="beat" aria-live="off">—</p>
       <section class="controls host-only" aria-label="Controles">
         <button id="play" type="button" class="primary" aria-label="Iniciar o metrônomo (se já estiver tocando, recomeça)" title="Iniciar"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
         <button id="pause" type="button" aria-label="Parar o metrônomo" title="Parar"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
       </section>
       <p id="status" aria-live="polite">Parado</p>
+      </section>
       <section class="offset host-only" aria-label="Ajuste fino deste aparelho">
         <p>Ajuste fino deste aparelho: <strong id="offset-value">0 ms</strong></p>
         <p class="hint">Se este aparelho soa atrasado em relação aos outros, aumente (toca mais cedo). Se soa adiantado, diminua.</p>
@@ -108,17 +112,6 @@
           <p class="hint">No MuseScore: Arquivo → Exportar → MusicXML (a partitura completa, uma vez só). Importe aqui e, no cartão de cada grupo, escolha o arquivo de áudio e a parte da partitura: o grupo todo recebe os dois.</p>
           <p id="score-msg" class="hint" aria-live="polite"></p>
         </div>
-        <div class="row">
-          <label><input id="with-metro" type="checkbox"> Metrônomo</label>
-          <label><input id="with-audio" type="checkbox" checked> Áudio</label>
-        </div>
-        <p class="hint">A partitura anda com o áudio; sem áudio, anda com o metrônomo (o andamento é o da aba SYNC). Os dois começam juntos.</p>
-        <div class="row icons">
-          <button id="start-all" type="button" aria-label="Voltar todos ao início" title="Voltar todos ao início"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
-          <button id="play-all" type="button" class="primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
-          <button id="pause-all" type="button" aria-label="Pausar todos" title="Pausar todos"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
-          <button id="stop-all" type="button" aria-label="Parar todos e voltar ao início" title="Parar todos e voltar ao início"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
-        </div>
         <div id="groups-list"></div>
         <div class="row">
           <input id="new-group" class="grow" placeholder="Novo grupo (ex.: Violinos)" maxlength="40">
@@ -136,13 +129,20 @@
             <div class="muted" id="pl-sub">Monte uma música na aba MÚSICA e adicione aqui.</div>
           </div>
         </div>
+        <button id="pl-stage" type="button" class="pl-stage" hidden title="Tela cheia só com a partitura, fonte maior e tela acesa">▢ Modo palco (tela cheia)</button>
+        <p id="pl-dirty" class="pl-dirty" hidden></p>
         <div class="pl-ctrl">
           <button id="rep-prev" type="button" class="round" aria-label="Música anterior" title="Música anterior"><svg class="ico" aria-hidden="true"><use href="#i-tostart"/></svg></button>
-          <button id="pl-pause" type="button" class="round" aria-label="Pausar todos" title="Pausar todos"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
-          <button id="pl-play" type="button" class="round big primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
-          <button id="pl-stop" type="button" class="round" aria-label="Parar todos" title="Parar todos"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
+          <button id="pause-all" type="button" class="round" aria-label="Pausar todos" title="Pausar todos"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
+          <button id="play-all" type="button" class="round big primary" aria-label="Tocar todos" title="Tocar todos"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+          <button id="stop-all" type="button" class="round" aria-label="Parar todos" title="Parar todos"><svg class="ico" aria-hidden="true"><use href="#i-stop"/></svg></button>
           <button id="rep-next" type="button" class="round" aria-label="Próxima música" title="Próxima música"><svg class="ico" aria-hidden="true"><use href="#i-fwd"/></svg></button>
         </div>
+        <div class="pl-opts">
+          <label><input id="with-metro" type="checkbox"> Metrônomo</label>
+          <label><input id="with-audio" type="checkbox" checked> Áudio</label>
+        </div>
+        <p class="hint pl-hint">O que o Tocar dispara: áudio, metrônomo ou os dois, começando juntos. A partitura anda com o áudio; sem áudio, com o metrônomo (andamento da aba SYNC). Pausar e Parar valem para tudo.</p>
         <ol id="rep-list" class="pl"></ol>
         <div class="pl-add">
           <input id="rep-name" class="grow" placeholder="Nome da música (opcional)" maxlength="60" aria-label="Nome da nova música">

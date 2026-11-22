@@ -35,6 +35,12 @@
     $('pl-label').textContent = cur ? 'CARREGADA AGORA' : 'NENHUMA MÚSICA CARREGADA';
     $('pl-title').textContent = cur ? cur.name : (data.songs.length ? 'Escolha uma música da lista' : 'Playlist vazia');
     $('pl-sub').textContent = cur ? chips(cur).join(' · ') : (data.songs.length ? 'Toque numa música para carregar.' : 'Monte uma música na aba MÚSICA e adicione aqui.');
+    const d = $('pl-dirty');
+    if (d) {
+      if (data.dirty) { d.hidden = false; d.innerHTML = 'Alterações ainda não guardadas nesta música (guardo sozinho em instantes). <button type="button" id="pl-save">Salvar agora</button>'; $('pl-save').onclick = () => call({ op: 'save' }, 'Alterações guardadas.'); }
+      else if (data.unsaved) { d.hidden = false; d.textContent = 'Esta configuração ainda não está na playlist. Toque em "+ Adicionar a música atual" para não perdê-la ao sair.'; }
+      else d.hidden = true;
+    }
     box.textContent = '';
     data.songs.forEach((m, i) => {
       const li = document.createElement('li');
@@ -73,12 +79,16 @@
     const n = $('rep-name');
     if (await call({ op: 'add', name: n.value }, 'Música salva no repertório.')) n.value = '';
   });
-  const clickId = (id) => () => { const b = $(id); if (b) b.click(); };
-  $('pl-play').addEventListener('click', clickId('play-all'));   // usa os mesmos botões e caixas da aba MÚSICA
-  $('pl-pause').addEventListener('click', clickId('pause-all'));
-  $('pl-stop').addEventListener('click', clickId('stop-all'));
   $('rep-next').addEventListener('click', () => call({ op: 'next' }, 'Próxima carregada.'));
   $('rep-prev').addEventListener('click', () => call({ op: 'prev' }, 'Anterior carregada.'));
+  const stageBtn = $('pl-stage');
+  if (stageBtn) {
+    stageBtn.addEventListener('click', () => {
+      const t = document.querySelector('#tabs [data-go="sync"]'); if (t) t.click();   // a partitura mora na aba SYNC
+      setTimeout(() => { if (window.sincronoStage) window.sincronoStage(true); }, 50);
+    });
+    setInterval(() => { stageBtn.hidden = !document.body.classList.contains('has-score'); }, 1000);
+  }
   load();
   setInterval(load, 4000);
 })();

@@ -139,3 +139,25 @@ section.controls button.primary, .controls button.primary, .row.icons button.pri
 section.controls .ico, .controls .ico, .row.icons .ico { width: 22px; height: 22px; }
 section.controls button.primary .ico, .controls button.primary .ico, .row.icons button.primary .ico { width: 26px; height: 26px; }
 #song-back, #song-fwd, .offset-buttons button:has(.ico) { border-radius: 999px; }
+.pl-dirty { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; background: #fef3c7; color: #78350f; font-size: .85rem; }
+.pl-dirty button { min-height: 32px; padding: 2px 10px; margin-left: 6px; }
+.pl-opts { display: flex; justify-content: center; gap: 22px; margin: 4px 0; }
+.pl-hint { text-align: center; }
+
+/* Metrônomo: cartão escuro como o da playlist */
+.met-card { background: var(--ink); color: #fff; border-radius: 16px; padding: 20px; display: grid; gap: 14px; justify-items: center; }
+.met-card .met-head { width: 100%; }
+.met-card #beat { color: #fff; margin: 0; }
+.met-card .fields { width: 100%; background: transparent; border: 0; padding: 0; gap: 14px; }
+.met-card label { color: #9ca3af; text-align: center; }
+.met-card input { background: #374151; border-color: #374151; color: #fff; font-size: 1.7rem; text-align: center; min-height: 56px; border-radius: 12px; }
+.met-card .controls { margin: 4px 0 0; }
+.met-card .controls button { background: #374151; border-color: #374151; color: #fff; }
+.met-card .controls button.primary, .met-card .controls #play { background: #fff; border-color: #fff; color: var(--ink); }
+.met-card .controls .ico, .met-card .controls button.primary .ico { fill: currentColor; }
+.met-card #status { color: #cbd5e1; text-align: center; }
+/* ajuste fino: botões redondos */
+.offset-buttons { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.offset-buttons button[data-offset] { width: 52px; height: 52px; min-height: 52px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.pl-stage { width: 100%; margin: 10px 0 0; border-radius: 999px; }
+.pl-stage[hidden] { display: none !important; }

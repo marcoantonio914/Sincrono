@@ -76,12 +76,15 @@ fun TransportButton(
     enabled: Boolean = true,
     primary: Boolean = false,
     label: String? = null,
+    onDark: Boolean = false,   // sobre o cartão escuro: o primário fica branco, o outro cinza-escuro
 ) {
-    val tint = if (!enabled) Pal.Graphite else if (primary) Color.White else Pal.Ink
+    val tint = if (!enabled) Pal.Graphite else if (onDark) (if (primary) Pal.Ink else Color.White) else if (primary) Color.White else Pal.Ink
     val shape = if (label == null) androidx.compose.foundation.shape.CircleShape else androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
     val m = (if (label == null) Modifier.size(if (primary) 64.dp else 52.dp) else modifier.height(48.dp))
         .semantics { contentDescription = description }
-    val colors = if (primary) androidx.compose.material3.ButtonDefaults.buttonColors(
+    val colors = if (onDark) androidx.compose.material3.ButtonDefaults.buttonColors(
+        containerColor = if (primary) Color.White else Color(0xFF374151), contentColor = Color.White, disabledContainerColor = Color(0xFF374151), disabledContentColor = Color(0xFF9CA3AF),
+    ) else if (primary) androidx.compose.material3.ButtonDefaults.buttonColors(
         containerColor = Pal.Ink, contentColor = Color.White, disabledContainerColor = Pal.Recessed, disabledContentColor = Pal.Graphite,
     ) else androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
         containerColor = Pal.Recessed, contentColor = Pal.Ink, disabledContainerColor = Pal.Canvas, disabledContentColor = Pal.Graphite,

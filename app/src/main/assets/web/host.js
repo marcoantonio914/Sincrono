@@ -249,7 +249,6 @@
     if (!endHandled && pos >= dur - 30) { endHandled = true; pauseAll('stop'); }
   }, 250);
   $('stop-all').addEventListener('click', () => pauseAll('stop'));
-  $('start-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'seek', positionMs: 0 }).then(refresh));
   $('add-group').addEventListener('click', () => {
     const name = $('new-group').value.trim();
     if (name) api('/api/groups', { op: 'add', name }).then(() => { $('new-group').value = ''; refresh(); });

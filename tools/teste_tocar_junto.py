@@ -60,7 +60,7 @@ try:
         if pg.is_visible("#start-host"): pg.click("#start-host")
         pg.set_input_files("#score-file", files=[{"name": "completa.musicxml", "mimeType": "application/xml", "buffer": xml}])
         pg.wait_for_selector("#score-view svg", timeout=6000)
-        pg.click('#tabs [data-go="audio"]')
+        pg.click('#tabs [data-go="playlist"]')
         pg.wait_for_timeout(1500)
         # 1) só metrônomo (sem áudio)
         pg.uncheck("#with-audio"); pg.check("#with-metro")
@@ -72,7 +72,7 @@ try:
         pg.wait_for_timeout(5600)
         x1 = pg.evaluate("parseFloat(document.querySelector('#score-view .ln').getAttribute('x1'))")
         check("só metrônomo: o cursor da partitura anda", x1 > x0 + 20, (x0, x1))
-        pg.click('#tabs [data-go="audio"]')
+        pg.click('#tabs [data-go="playlist"]')
         pg.click("#stop-all"); pg.wait_for_timeout(2300)
         # 2) metrônomo + áudio: começam no mesmo instante
         pg.check("#with-audio"); pg.check("#with-metro")

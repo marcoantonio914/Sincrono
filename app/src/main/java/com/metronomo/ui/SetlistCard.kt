@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -81,6 +83,8 @@ fun SetlistCard() {
             dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancelar") } },
         )
     }
+    val withMetro by SessionController.playWithMetro.collectAsState()
+    val withAudio by SessionController.playWithAudio.collectAsState()
     val songs = data?.optJSONArray("songs")
     val count = songs?.length() ?: 0
     val current = data?.optInt("current", -1) ?: -1
@@ -115,9 +119,41 @@ fun SetlistCard() {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
         TransportButton(Glyph.TO_START, "Música anterior", { run(JSONObject().put("op", "prev"), "Anterior carregada.") })
         TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.pauseTogether(false) })
-        TransportButton(Glyph.PLAY, "Tocar todos", { SessionController.playTogether(false, true) }, primary = true)
+        TransportButton(Glyph.PLAY, "Tocar todos", { SessionController.playTogether(withMetro, withAudio) }, enabled = withMetro || withAudio, primary = true)
         TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(true) })
         TransportButton(Glyph.FORWARD, "Próxima música", { run(JSONObject().put("op", "next"), "Próxima carregada.") })
+    }
+    // modo palco, à vista também aqui
+    val hasScore by SessionController.scoreFile.collectAsState()
+    if (hasScore.isNotEmpty()) {
+        androidx.compose.material3.FilledTonalButton(onClick = { SessionController.stageOpen.value = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("▢  Modo palco (tela cheia)")
+        }
+    }
+    // o que o Tocar dispara
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = withMetro, onCheckedChange = { SessionController.playWithMetro.value = it })
+        Text("Metrônomo", Modifier.clickable { SessionController.playWithMetro.value = !withMetro })
+        androidx.compose.foundation.layout.Spacer(Modifier.size(16.dp))
+        Checkbox(checked = withAudio, onCheckedChange = { SessionController.playWithAudio.value = it })
+        Text("Áudio", Modifier.clickable { SessionController.playWithAudio.value = !withAudio })
+    }
+    Text(
+        "O Tocar dispara áudio, metrônomo ou os dois, começando juntos. A partitura anda com o áudio; sem áudio, com o metrônomo (andamento da aba SYNC). Pausar e Parar valem para tudo.",
+        color = Pal.Graphite, style = MaterialTheme.typography.bodySmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    )
+    // a configuração não some: a música carregada guarda sozinha as mudanças
+    if (data?.optBoolean("dirty") == true) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFFEF3C7)).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Alterações ainda não guardadas (guardo sozinho em instantes).", Modifier.weight(1f), color = Color(0xFF78350F), style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { run(JSONObject().put("op", "save"), "Alterações guardadas.") }) { Text("Salvar agora") }
+        }
+    } else if (data?.optBoolean("unsaved") == true) {
+        Text(
+            "Esta configuração ainda não está na playlist. Toque em \"+ Adicionar a música atual\" para não perdê-la ao sair.",
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color(0xFFFEF3C7)).padding(12.dp),
+            color = Color(0xFF78350F), style = MaterialTheme.typography.bodySmall,
+        )
     }
     // lista
     Module("Músicas", if (count > 0) "$count" else null) {

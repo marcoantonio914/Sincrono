@@ -62,24 +62,34 @@ fun ScoreCard(ui: UiState) {
     val file by SessionController.scoreFile.collectAsState()
     if (ui.baseUrl.isNotEmpty() && file.isNotEmpty()) {
         val isHost = ui.role == SessionController.Role.HOST
-        var stage by remember { mutableStateOf(false) }
         Module("Partitura", null) {
+            // Botão bem à vista: tela cheia só com a partitura (fonte maior, tela sempre acesa).
+            androidx.compose.material3.FilledTonalButton(
+                onClick = { SessionController.stageOpen.value = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { androidx.compose.material3.Text("▢  Modo palco (tela cheia)") }
             ScoreWebView(ui.baseUrl, height = 380.dp, host = isHost)
-            androidx.compose.material3.TextButton(onClick = { stage = true }) { androidx.compose.material3.Text("Modo palco (tela cheia)") }
         }
-        if (stage) {
-            // Tela cheia só com a partitura, fonte maior, tela sempre acesa; "Voltar" ou o botão do celular sai.
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { stage = false },
-                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-            ) {
-                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White)) {
-                    ScoreWebView(ui.baseUrl, height = 0.dp, host = isHost, stage = true)
-                    androidx.compose.material3.TextButton(
-                        onClick = { stage = false },
-                        modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd),
-                    ) { androidx.compose.material3.Text("Sair do palco") }
-                }
+    }
+}
+
+/** Modo palco: tela cheia só com a partitura, fonte maior, tela sempre acesa. "Sair do palco" ou o botão voltar do celular fecha. */
+@Composable
+fun StageDialog(ui: UiState) {
+    val open by SessionController.stageOpen.collectAsState()
+    val file by SessionController.scoreFile.collectAsState()
+    if (open && ui.baseUrl.isNotEmpty() && file.isNotEmpty()) {
+        val isHost = ui.role == SessionController.Role.HOST
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { SessionController.stageOpen.value = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White)) {
+                ScoreWebView(ui.baseUrl, height = 0.dp, host = isHost, stage = true)
+                androidx.compose.material3.TextButton(
+                    onClick = { SessionController.stageOpen.value = false },
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd),
+                ) { androidx.compose.material3.Text("Sair do palco") }
             }
         }
     }

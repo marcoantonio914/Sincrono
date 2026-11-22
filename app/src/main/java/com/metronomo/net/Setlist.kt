@@ -52,7 +52,10 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
                     .put("marks", m.optJSONObject("marks")?.length() ?: 0),
             )
         }
+        val cur = find(current)
+        val dirty = cur != null && hasConfig() && fpLive() != fpSong(cur)
         JSONObject().put("songs", arr).put("current", if (current < 0) JSONObject.NULL else current)
+            .put("dirty", dirty).put("unsaved", cur == null && hasConfig())
     }
 
     private fun err(status: Int, text: String) = Pair(status, JSONObject().put("error", text))
@@ -76,7 +79,7 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
             val f = server.hub(gid)?.fileInfo() ?: continue
             val fn = "audio-${audio.length() + 1}.bin"
             f.path.copyTo(File(d, fn), overwrite = true)
-            audio.put(JSONObject().put("group", server.groups.name(gid)).put("file", fn).put("name", f.name).put("mime", f.mime))
+            audio.put(JSONObject().put("group", server.groups.name(gid)).put("file", fn).put("name", f.name).put("mime", f.mime).put("size", f.path.length()))
         }
         m.put("audio", audio)
         val parts = JSONObject()
@@ -88,6 +91,55 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
         sc?.marks?.forEach { (sig, v) -> marks.put(sig, JSONObject().put("marks", JSONArray(v.first)).put("offset", v.second)) }
         m.put("marks", marks)
     }
+
+    private fun hasConfig(): Boolean =
+        server.scoreSnapshot() != null || server.groups.ids().any { server.hub(it)?.hasFile() == true }
+
+    private fun fp(score: String, audio: List<String>, parts: List<String>, marks: String, bpm: Double, beats: Int) =
+        listOf(score, audio.sorted().joinToString(";"), parts.sorted().joinToString(";"), marks, bpm.toString(), beats.toString()).joinToString("#")
+
+    /** "Impressão digital" da configuração viva da sessão (para saber se mudou desde que a música foi guardada). */
+    private fun fpLive(): String {
+        val sc = server.scoreSnapshot()
+        val audio = server.groups.ids().mapNotNull { gid -> server.hub(gid)?.fileInfo()?.let { "${server.groups.name(gid)}|${it.name}|${it.path.length()}" } }
+        val parts = sc?.parts?.filter { server.groups.exists(it.key) }?.map { "${server.groups.name(it.key)}=${it.value}" } ?: emptyList()
+        val marks = sc?.marks?.entries?.sortedBy { it.key }?.joinToString(";") { "${it.key}:${it.value.second}:${it.value.first.joinToString(",")}" } ?: ""
+        val st = server.metronomeState()
+        return fp(sc?.let { "${it.name}|${it.bytes.size}" } ?: "-", audio, parts, marks, st.bpm, st.beatsPerBar)
+    }
+
+    private fun fpSong(m: JSONObject): String {
+        val sc = m.optJSONObject("score")
+        val a = m.optJSONArray("audio") ?: JSONArray()
+        val audio = List(a.length()) { a.getJSONObject(it).let { x -> "${x.getString("group")}|${x.getString("name")}|${x.optLong("size", -1)}" } }
+        val p = m.optJSONObject("parts") ?: JSONObject()
+        val parts = p.keys().asSequence().map { "$it=${p.getInt(it)}" }.toList()
+        val mk = m.optJSONObject("marks") ?: JSONObject()
+        val marks = mk.keys().asSequence().sorted().joinToString(";") { k ->
+            val o = mk.getJSONObject(k); val arr = o.getJSONArray("marks")
+            "$k:${o.optDouble("offset", 0.0)}:${List(arr.length()) { arr.getDouble(it) }.joinToString(",")}"
+        }
+        return fp(sc?.let { "${it.getString("name")}|${it.optInt("size")}" } ?: "-", audio, parts, marks, m.optDouble("bpm", 0.0), m.optInt("beats", 4))
+    }
+
+    /** A música carregada guarda sozinha o que mudou na configuração (nada tocando; ignora sessão vazia). Devolve true se gravou. */
+    fun autosave(): Boolean = synchronized(lock) {
+        val m = find(current) ?: return false
+        if (!hasConfig() || !nothingPlaying() || fpLive() == fpSong(m)) return false
+        snapshot(m)
+        save()
+        true
+    }
+
+    /** Ao abrir a sessão: volta a música que estava carregada (se a sessão ainda está vazia e nada toca). */
+    fun restoreLast() = synchronized(lock) {
+        val m = find(current) ?: return@synchronized
+        if (hasConfig() || !nothingPlaying()) return@synchronized
+        runCatching { apply(m) }
+    }
+
+    /** Impressão atual (para o laço que só grava quando a configuração parou de mudar). */
+    fun liveFingerprint(): String = synchronized(lock) { fpLive() }
 
     private fun nothingPlaying(): Boolean {
         if (server.metronomeState().playing) return false
@@ -159,6 +211,10 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
                 snapshot(m)
                 current = m.getInt("id")
                 save()
+                Pair(200, json())
+            }
+            "save" -> {
+                autosave()
                 Pair(200, json())
             }
             "rename" -> {

@@ -252,6 +252,7 @@
   }
   { const x = document.createElement('button'); x.id = 'score-stage-exit'; x.type = 'button'; x.textContent = 'Sair do palco'; sec.appendChild(x); x.addEventListener('click', () => setStage(false)); }
   on('score-stage', 'click', () => setStage(!stage));
+  window.sincronoStage = (v) => setStage(v);   // usado pela aba PLAYLIST
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage) setStage(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && stage) setStage(false); });
   setInterval(() => {

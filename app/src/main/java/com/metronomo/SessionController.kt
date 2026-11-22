@@ -237,6 +237,7 @@ object SessionController {
         audioPlayback = null
         audioPlayer = null
         _audio.value = AudioPlayback.Ui()
+        if (_ui.value.role == Role.HOST) runCatching { server?.setlist?.autosave() }   // guarda a configuração antes de sair
         server?.clearAllAudio()
         _groups.value = GroupsInfo()
         _score.value = ScoreInfo()
@@ -540,6 +541,13 @@ object SessionController {
      * Os dois começam no MESMO instante combinado (startAt). Se o áudio recomeça do meio, o primeiro clique
      * cai na próxima batida alinhada com o arquivo.
      */
+    /** Modo palco aberto (tela cheia só com a partitura). Qualquer tela pode abrir. */
+    val stageOpen = MutableStateFlow(false)
+
+    /** O que o Tocar da playlist dispara (caixas Metrônomo/Áudio). Compartilhado, então vale em qualquer tela. */
+    val playWithMetro = MutableStateFlow(false)
+    val playWithAudio = MutableStateFlow(true)
+
     fun playTogether(metronome: Boolean, audio: Boolean) {
         val ck = clock ?: return
         val c = client
@@ -886,6 +894,20 @@ object SessionController {
                 val quality = computeQuality(ck, en, ap)
                 _ui.update {
                     it.copy(clockSynced = ck.isSynced, rttMs = ck.rttMs.takeIf { v -> !v.isNaN() }, sync = quality)
+                }
+            }
+        }
+        // Configuração da música: volta a última carregada e guarda sozinha o que for mudado (só anfitrião).
+        server?.setlist?.let { sl ->
+            sc.launch(Dispatchers.IO) {
+                delay(2000)            // depois de restaurar grupos e volumes
+                sl.restoreLast()
+                var last = ""
+                while (isActive) {
+                    delay(3000)
+                    val fp = sl.liveFingerprint()
+                    if (fp == last) sl.autosave()       // só grava quando a configuração parou de mudar
+                    last = fp
                 }
             }
         }
