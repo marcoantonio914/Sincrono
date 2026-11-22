@@ -8,7 +8,7 @@
   const box = $('score-view');
   const sel = $('score-part');
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
-  let view = null, drawnGroup = '', stage = /[?&]stage=1/.test(location.search), seeking = false;
+  let view = null, drawnGroup = '', stage = /[?&]stage=1/.test(location.search), seeking = false, seekAt = 0;
   // visualizações: 'continuous' (uma linha rolando), 'pages' (quebra sozinha para caber na tela) e 'score' (respeita as quebras de linha da partitura)
   const MODES = ['continuous', 'pages', 'score'];
   const MODE_NAME = { continuous: 'Uma linha rolando', pages: 'Linhas que cabem na tela', score: 'Quebras da partitura' };
@@ -201,8 +201,11 @@
   (function wireTimeline() {
     const r = $('score-seek'); if (!r) return;
     const label = (ms) => { const l = score.locate(ms); const n = l.m !== undefined ? (score.measures[l.m].number || (l.m + 1)) : 1; $('score-seek-label').textContent = 'compasso ' + n; return l; };
-    r.addEventListener('pointerdown', () => { seeking = true; });
-    r.addEventListener('input', () => { if (!score) return; const l = label(Number(r.value)); if (view && l.k !== undefined) view.setCursor({ k: l.k, q: 0 }, true); });
+    // 'seeking' = o dedo está no controle. Se o toque for cancelado (rolagem da página no celular), solta também,
+    // senão o controle ficava preso e deixava de acompanhar a música.
+    r.addEventListener('pointerdown', () => { seeking = true; seekAt = Date.now(); });
+    ['pointerup', 'pointercancel', 'lostpointercapture', 'blur'].forEach((ev) => r.addEventListener(ev, () => { setTimeout(() => { seeking = false; }, 60); }));
+    r.addEventListener('input', () => { seekAt = Date.now(); if (!score) return; const l = label(Number(r.value)); if (view && l.k !== undefined) view.setCursor({ k: l.k, q: 0 }, true); });
     r.addEventListener('change', () => {
       seeking = false;
       if (!score) return;
@@ -281,6 +284,7 @@
     if (myGroup() !== drawnGroup) { renderSelect(); draw(); }   // o anfitrião moveu este aparelho de grupo
     const ms = scoreMs();
     const loc = score.locate(ms);
+    if (seeking && Date.now() - seekAt > 3000) seeking = false;   // vigia: nunca fica preso
     if (!seeking) { const r = $('score-seek'); if (r && !r.hidden !== false && !(r.parentElement && r.parentElement.hidden)) { r.value = String(Math.round(ms)); if (window.__scoreSeekLabel) window.__scoreSeekLabel(ms); } }
     if (loc.k === undefined) return;
     const key = loc.k + ':' + loc.q.toFixed(2);

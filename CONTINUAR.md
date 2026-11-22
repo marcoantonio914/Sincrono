@@ -191,6 +191,11 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Causa: na v22 toda `.row` virava flutuante no palco, inclusive as linhas de marcar compassos. Agora só a barra de visualização (`.row.tb`) flutua; as linhas de marcação e a linha do tempo ficam ocultas no palco.
 - Teste: `tools/teste_palco_quebras.py` confere que as linhas de marcação não aparecem no palco e que os botões não se sobrepõem.
 
+## 9k. v25 — correção: a linha do tempo (navegar pela partitura) acompanha a música em tempo real (Kotlin sem mudança)
+
+- Causa: o controle marcava "estou arrastando" ao tocar e só soltava no evento `change`. Se o toque era cancelado (rolagem da página no celular), ficava preso e parava de acompanhar a música. Agora solta em `pointerup/pointercancel/lostpointercapture/blur` e há um vigia de 3 s.
+- Teste novo: `tools/teste_linha_tempo_real.py`. Reproduzido e corrigido na página web; no app Android (WebView) NÃO foi testado. Se o problema persistir lá, o próximo suspeito é o `sincronoTick` do app não atualizar o estado do metrônomo/áudio no host.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -218,3 +223,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v22: palco com várias linhas, visualização "como na partitura", parte só do anfitrião, botões redondos, Nova música.
 - v23: partitura só com cifra e letra (pauta oculta), patch do usuário.
 - v24: correção do palco (Marcar compassos cobria os botões).
+- v25: linha do tempo acompanha a música em tempo real (controle não fica mais preso).
