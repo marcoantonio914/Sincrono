@@ -865,6 +865,21 @@ object SessionController {
         playback.start()
         cl.start()
         cm.start()
+        // Fim da música: o anfitrião para tudo e volta ao 0:00 (como "Parar todos"), sem precisar clicar em parar.
+        sc.launch {
+            var ended = false
+            while (isActive) {
+                delay(250)
+                if (_ui.value.role != Role.HOST) continue
+                val a = _audio.value
+                val pos = audioPlayback?.positionMs()
+                if (!a.playing || pos == null || a.durationMs <= 0 || pos < a.durationMs - 500) { ended = false; continue }
+                if (!ended && pos >= a.durationMs - 30) {
+                    ended = true
+                    pauseTogether(true)
+                }
+            }
+        }
         sc.launch {
             while (isActive) {
                 delay(500)

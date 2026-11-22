@@ -237,6 +237,17 @@
     refresh();
   }
   $('pause-all').addEventListener('click', () => pauseAll('pause'));
+  // Fim da música: o anfitrião para tudo e volta ao 0:00 (como "Parar todos"), sem precisar clicar em parar.
+  let endHandled = false;
+  setInterval(() => {
+    if (document.body.classList.contains('guest')) return;
+    const a = typeof songState !== 'undefined' ? songState : null;
+    const dur = typeof songBuffer !== 'undefined' && songBuffer ? songBuffer.duration * 1000 : 0;
+    if (!a || !a.file || !a.playing || dur <= 0) { endHandled = false; return; }
+    const pos = songPositionMs() || 0;
+    if (pos < dur - 500) { endHandled = false; return; }
+    if (!endHandled && pos >= dur - 30) { endHandled = true; pauseAll('stop'); }
+  }, 250);
   $('stop-all').addEventListener('click', () => pauseAll('stop'));
   $('start-all').addEventListener('click', () => api('/api/audio/cmd?group=all', { type: 'seek', positionMs: 0 }).then(refresh));
   $('add-group').addEventListener('click', () => {

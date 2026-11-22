@@ -50,6 +50,7 @@ fun SetlistCard() {
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var message by remember { mutableStateOf("") }
     var newName by remember { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<Pair<Int, String>?>(null) }   // (id, nome atual) da música sendo renomeada
 
     fun refresh() {
         scope.launch { data = withContext(Dispatchers.IO) { SessionController.setlistJson() } }
@@ -65,6 +66,21 @@ fun SetlistCard() {
         while (true) { refresh(); delay(4000) }
     }
 
+    renaming?.let { (rid, old) ->
+        var text by remember(rid) { mutableStateOf(old) }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Renomear música") },
+            text = { OutlinedTextField(value = text, onValueChange = { text = it.take(60) }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = {
+                TextButton(
+                    enabled = text.isNotBlank(),
+                    onClick = { run(JSONObject().put("op", "rename").put("id", rid).put("name", text.trim()), "Música renomeada."); renaming = null },
+                ) { Text("Salvar") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancelar") } },
+        )
+    }
     val songs = data?.optJSONArray("songs")
     val count = songs?.length() ?: 0
     val current = data?.optInt("current", -1) ?: -1
@@ -95,12 +111,13 @@ fun SetlistCard() {
             Text(cur?.let { chips(it) } ?: if (count > 0) "Toque numa música para carregar." else "Monte uma música na aba MÚSICA e adicione aqui.", color = Color(0xFFCBD5E1), style = MaterialTheme.typography.bodySmall)
         }
     }
-    // controles
+    // controles: anterior, pausar, TOCAR (no centro), parar, próxima. Dois de cada lado, então o tocar fica centralizado.
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        RoundBtn("⏮", 52, false) { run(JSONObject().put("op", "prev"), "Anterior carregada.") }
-        RoundBtn("▶", 64, true) { SessionController.playTogether(false, true) }
-        RoundBtn("■", 52, false) { SessionController.pauseTogether(true) }
-        RoundBtn("⏭", 52, false) { run(JSONObject().put("op", "next"), "Próxima carregada.") }
+        TransportButton(Glyph.TO_START, "Música anterior", { run(JSONObject().put("op", "prev"), "Anterior carregada.") })
+        TransportButton(Glyph.PAUSE, "Pausar todos", { SessionController.pauseTogether(false) })
+        TransportButton(Glyph.PLAY, "Tocar todos", { SessionController.playTogether(false, true) }, primary = true)
+        TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(true) })
+        TransportButton(Glyph.FORWARD, "Próxima música", { run(JSONObject().put("op", "next"), "Próxima carregada.") })
     }
     // lista
     Module("Músicas", if (count > 0) "$count" else null) {
@@ -127,6 +144,7 @@ fun SetlistCard() {
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Subir") }, enabled = i > 0, onClick = { menu = false; run(JSONObject().put("op", "move").put("id", id).put("dir", -1), "") })
                         DropdownMenuItem(text = { Text("Descer") }, enabled = i < count - 1, onClick = { menu = false; run(JSONObject().put("op", "move").put("id", id).put("dir", 1), "") })
+                        DropdownMenuItem(text = { Text("Renomear") }, onClick = { menu = false; renaming = Pair(id, m.getString("name")) })
                         DropdownMenuItem(text = { Text("Atualizar com o atual") }, onClick = { menu = false; run(JSONObject().put("op", "update").put("id", id), "Música atualizada.") })
                         DropdownMenuItem(text = { Text("Remover", color = Pal.Bad) }, onClick = { menu = false; run(JSONObject().put("op", "remove").put("id", id), "Música removida.") })
                     }
@@ -144,12 +162,4 @@ fun SetlistCard() {
         if (message.isNotEmpty()) Text(message, color = Pal.Graphite, style = MaterialTheme.typography.bodySmall)
         Text("Cada música guarda a partitura, o áudio de cada grupo, a parte de cada grupo, o andamento e os marcadores. Só troca com tudo parado.", color = Pal.Graphite, style = MaterialTheme.typography.bodySmall)
     }
-}
-
-@Composable
-private fun RoundBtn(symbol: String, size: Int, primary: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.size(size.dp).clip(CircleShape).background(if (primary) Pal.Ink else Pal.Recessed).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Text(symbol, color = if (primary) Color.White else Pal.Ink, style = MaterialTheme.typography.titleLarge) }
 }

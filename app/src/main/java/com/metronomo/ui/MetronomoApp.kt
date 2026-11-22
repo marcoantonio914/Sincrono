@@ -417,7 +417,7 @@ private fun SyncTab(
             Text("$beats tempos por compasso", modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
             FilledTonalButton(onClick = { setBeats((beats + 1).coerceIn(MetronomeState.MIN_BEATS, MetronomeState.MAX_BEATS)) }, modifier = Modifier.height(48.dp)) { Text("+1") }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             TransportButton(
                 Glyph.PLAY, "Iniciar o metrônomo (se já estiver tocando, recomeça do primeiro tempo)",
                 { SessionController.sendCommand("play", bpm, beats) },
@@ -532,7 +532,7 @@ private fun GroupsPanel() {
             style = MaterialTheme.typography.bodySmall,
             color = Pal.Graphite,
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             TransportButton(Glyph.TO_START, "Voltar todos ao início", { SessionController.audioToStart("all") }, Modifier.weight(1f))
             TransportButton(
                 Glyph.PLAY, "Tocar todos", { SessionController.playTogether(withMetro, withAudio) }, Modifier.weight(1f),
@@ -652,7 +652,7 @@ private fun GroupRow(g: GroupInfo, level: Float, score: ScoreInfo, onPick: () ->
                 }
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             TransportButton(Glyph.TO_START, "Voltar ao início", { SessionController.audioToStart(g.id) }, Modifier.weight(1f), enabled = g.file != null)
             TransportButton(Glyph.PLAY, "Tocar", { SessionController.audioCommand("play", g.id) }, Modifier.weight(1f), enabled = g.file != null && !g.playing, primary = true)
             TransportButton(Glyph.PAUSE, "Pausar", { SessionController.audioCommand("pause", g.id) }, Modifier.weight(1f), enabled = g.playing)
@@ -895,15 +895,15 @@ private fun AudioSection(ui: UiState) {
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                 TransportButton(Glyph.PLAY, "Tocar", { SessionController.audioCommand("play") }, Modifier.weight(1f), enabled = !audio.playing, primary = true)
                 TransportButton(Glyph.PAUSE, "Pausar", { SessionController.audioCommand("pause") }, Modifier.weight(1f), enabled = audio.playing)
                 TransportButton(Glyph.STOP, "Parar e voltar ao início", { SessionController.audioCommand("stop") }, Modifier.weight(1f))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                 TransportButton(Glyph.TO_START, "Voltar ao início", { SessionController.audioToStart() }, Modifier.weight(1f))
-                TransportButton(Glyph.BACK, "Voltar 10 segundos", { SessionController.audioSeekBy(-10_000.0) }, Modifier.weight(1f), label = "10")
-                TransportButton(Glyph.FORWARD, "Avançar 10 segundos", { SessionController.audioSeekBy(10_000.0) }, Modifier.weight(1f), label = "10")
+                TransportButton(Glyph.BACK, "Voltar 10 segundos", { SessionController.audioSeekBy(-10_000.0) }, Modifier, label = "10")
+                TransportButton(Glyph.FORWARD, "Avançar 10 segundos", { SessionController.audioSeekBy(10_000.0) }, Modifier, label = "10")
             }
             if (audio.deviceCount > audio.readyCount) {
                 Text(

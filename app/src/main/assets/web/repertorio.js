@@ -75,6 +75,7 @@
   });
   const clickId = (id) => () => { const b = $(id); if (b) b.click(); };
   $('pl-play').addEventListener('click', clickId('play-all'));   // usa os mesmos botões e caixas da aba MÚSICA
+  $('pl-pause').addEventListener('click', clickId('pause-all'));
   $('pl-stop').addEventListener('click', clickId('stop-all'));
   $('rep-next').addEventListener('click', () => call({ op: 'next' }, 'Próxima carregada.'));
   $('rep-prev').addEventListener('click', () => call({ op: 'prev' }, 'Anterior carregada.'));

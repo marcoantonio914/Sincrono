@@ -63,7 +63,10 @@ fun GlyphIcon(glyph: Glyph, color: Color, modifier: Modifier = Modifier.size(24.
     }
 }
 
-/** Botão de transporte só com ícone ([description] é lida por leitores de tela); [label] é um texto curto opcional (ex.: "10"). */
+/**
+ * Botão de transporte REDONDO só com ícone ([description] é lida por leitores de tela): 52 dp, ou 64 dp se [primary].
+ * Com [label] (ex.: "10") vira uma pílula. O tamanho é fixo: quem chama centraliza a linha (o [modifier] só é usado na pílula).
+ */
 @Composable
 fun TransportButton(
     glyph: Glyph,
@@ -74,20 +77,27 @@ fun TransportButton(
     primary: Boolean = false,
     label: String? = null,
 ) {
-    val content: @Composable RowScope.() -> Unit = {
-        val tint = if (!enabled) Pal.Graphite else if (primary) Color.White else Pal.Ink
-        GlyphIcon(glyph, tint, Modifier.size(24.dp))
+    val tint = if (!enabled) Pal.Graphite else if (primary) Color.White else Pal.Ink
+    val shape = if (label == null) androidx.compose.foundation.shape.CircleShape else androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+    val m = (if (label == null) Modifier.size(if (primary) 64.dp else 52.dp) else modifier.height(48.dp))
+        .semantics { contentDescription = description }
+    val colors = if (primary) androidx.compose.material3.ButtonDefaults.buttonColors(
+        containerColor = Pal.Ink, contentColor = Color.White, disabledContainerColor = Pal.Recessed, disabledContentColor = Pal.Graphite,
+    ) else androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+        containerColor = Pal.Recessed, contentColor = Pal.Ink, disabledContainerColor = Pal.Canvas, disabledContentColor = Pal.Graphite,
+    )
+    androidx.compose.material3.Button(
+        onClick = onClick,
+        modifier = m,
+        enabled = enabled,
+        shape = shape,
+        colors = colors,
+        contentPadding = if (label == null) androidx.compose.foundation.layout.PaddingValues(0.dp) else androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp),
+    ) {
+        GlyphIcon(glyph, tint, Modifier.size(if (primary) 28.dp else 22.dp))
         if (label != null) {
             Spacer(Modifier.width(6.dp))
             Text(label)
         }
-    }
-    val m = modifier
-        .height(56.dp)
-        .semantics { contentDescription = description }
-    if (primary) {
-        Button(onClick = onClick, modifier = m, enabled = enabled, content = content)
-    } else {
-        FilledTonalButton(onClick = onClick, modifier = m, enabled = enabled, content = content)
     }
 }

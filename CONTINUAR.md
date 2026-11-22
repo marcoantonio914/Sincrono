@@ -151,6 +151,14 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - **Android:** `TAB_NAMES` com PLAYLIST (índices: 0 SYNC, 1 MÚSICA, 2 PLAYLIST, 3 MIXER, 4 REDE); `ui/SetlistCard.kt` refeito no mesmo estilo (Compose; ▶ chama `playTogether(false, true)`, ■ `pauseTogether(true)`). Backend (API/Setlist.kt) não mudou.
 - **Testes:** `teste_repertorio.py` atualizado (aba playlist, cartão, menu ⋯; tira captura em scratchpad). Todos passam. Kotlin NÃO compilado.
 
+## 9f. v20 — fim da música volta ao 0:00, botão de pausa, controles redondos em todas as abas, renomear no app (Kotlin NÃO compilado aqui)
+- **Pedido:** (1) quando a música acabar, tudo volta ao 0:00 sem clicar em parar; (2) botão de pausa na playlist; (3) controles centralizados (no print do usuário o TOCAR não ficava no meio: 1 botão à esquerda, 2 à direita); (4) abas SYNC e MÚSICA com os mesmos botões redondos da playlist; (5) renomear música (no app).
+- **Fim da música:** o ANFITRIÃO detecta (posição do áudio dele ≥ duração) e faz o mesmo que "Parar todos" (áudio `stop` + metrônomo `pause` depois de 1,2 s). Web: `host.js` (intervalo de 250 ms, `endHandled`), usa `songBuffer.duration`. Android: laço de 250 ms em `SessionController.startSession` (só `Role.HOST`; usa `audioPlayback.positionMs()` e `_audio.value.durationMs`; reaciona quando sai do fim). Só vale para o áudio do grupo do próprio anfitrião; só metrônomo nunca "acaba". Se o anfitrião não tiver áudio no próprio grupo, não há parada automática.
+- **Playlist:** controles = anterior, PAUSAR, TOCAR (centro), parar, próxima (`#pl-pause` clica em `#pause-all`). Android: mesmos 5 botões.
+- **Botões redondos:** web `style.css` (final): `.controls`, `section.controls`, `.row.icons` ficam redondos (52 px, primário 64 px) e centralizados; Android: `TransportButton` (Transport.kt) agora é CircleShape de tamanho fixo (pílula só com `label`, ex.: "10"); as linhas de transporte usam `Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally)`.
+- **Renomear no app:** menu "⋯" da playlist → "Renomear" → AlertDialog (`op: rename`). A página já tinha.
+- **Testes:** `tools/teste_fim_da_musica.py` (música de 4 s com metrônomo: para sozinha e volta a 0; pausa mantém a posição; tocar centralizado; botões redondos). Todos os testes passam. Kotlin NÃO compilado.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -173,3 +181,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v17: marcadores de compasso (timestamp) para áudio gravado.
 - v18: repertório (playlist) com músicas preparadas.
 - v19: aba PLAYLIST separada com visual de playlist.
+- v20: fim da música volta ao 0:00, pausa, botões redondos, renomear no app.
