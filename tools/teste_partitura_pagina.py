@@ -91,9 +91,8 @@ try:
         pg.click("#score-zoom-in"); pg.click("#score-zoom-out")
         # cliente (já aberto acima)
         check("cliente vê a partitura, sem os controles de importar", cl.is_visible("#score-view") and not cl.is_visible("#score-file"))
-        cl.select_option("#score-part", "2"); cl.wait_for_timeout(300)
-        ptxt = cl.eval_on_selector("#score-view svg", "s => s.textContent")
-        check("cliente troca para a própria parte (piano: sem 'La' e sem 'mp')", "La" not in ptxt and "mp" not in ptxt and "Andante" in ptxt, ptxt[:100])
+        # v22: o convidado não escolhe a parte (só o anfitrião, pelo cartão do grupo)
+        check("cliente não tem seletor de parte", not cl.is_visible("#score-part"))
         # remover
         pg.once("dialog", lambda d: d.accept())
         pg.click('#tabs [data-go="audio"]')

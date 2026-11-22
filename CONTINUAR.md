@@ -178,6 +178,14 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Também: campos BPM/Tempos não estouram em 320 px.
 - Teste novo: `tools/teste_palco_quebras.py`. Kotlin (`Setlist.kt` op `new`, `SetlistCard.kt`) NÃO compilado.
 
+## 9i. v23 — partitura só com cifra e letra (pauta oculta) (Kotlin sem mudança)
+
+- Patch do usuário (`sincrono-pauta-oculta.patch`) incorporado sobre a v22. MusicXML com `staff-lines 0` ou `print-object="no"` vira vista só de cifras e letra: sem pauta, clave, notas, pausas nem barras de compasso; cifras e sílabas ganham largura mínima para não se sobreporem; o cursor cobre cifra e letra.
+- Só um trecho do patch não coube (a linha `this.noStaff = ...` em `score-view.js`, por causa do zoom da v22) e foi colocado à mão. O resto aplicou limpo.
+- Exemplo novo: `docs/exemplos-partitura/cifra-e-letra.musicxml`. Teste novo: `tools/teste_partitura_sem_pauta.py`.
+- Teste antigo `teste_partitura_pagina.py` atualizado: o convidado não tem seletor de parte (regra da v22).
+- Limite conhecido: o espaço vertical entre linhas na vista sem pauta ainda reserva a altura da pauta oculta (linhas bem afastadas no celular).
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -203,3 +211,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v20: fim da música volta ao 0:00, pausa, botões redondos, renomear no app.
 - v21: ícone, metrônomo no visual da playlist, Tocar único na playlist, configuração que não some, modo palco à vista.
 - v22: palco com várias linhas, visualização "como na partitura", parte só do anfitrião, botões redondos, Nova música.
+- v23: partitura só com cifra e letra (pauta oculta), patch do usuário.

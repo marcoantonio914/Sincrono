@@ -110,6 +110,8 @@
       const starts = [];
       for (const n of notes) { const s = Math.round(n.start * 1e4) / 1e4; if (starts.indexOf(s) < 0) starts.push(s); }
       for (const c of (m.clefChanges || [])) { const s = Math.round(c.q * 1e4) / 1e4; if (starts.indexOf(s) < 0) starts.push(s); }
+      // sem pauta: cada cifra ganha o seu tempo, para o texto não se sobrepor
+      if (this.noStaff) for (const h of (m.harm || [])) { const s = Math.round(h.q * 1e4) / 1e4; if (s < lenQ - 1e-4 && starts.indexOf(s) < 0) starts.push(s); }
       starts.sort((a, b) => a - b);
       if (!starts.length) starts.push(0);
       const slots = starts.map((s, idx) => {
@@ -120,7 +122,13 @@
         for (const n of m.notes) if (n.grace && Math.abs(n.start - s) < 1e-4) { gr[n.staff] = (gr[n.staff] || 0) + 1; ng = Math.max(ng, gr[n.staff]); }
         const clefW = (m.clefChanges || []).some((c) => Math.abs(c.q - s) < 1e-4 && s > 1e-4) ? 16 : 0;
         const acc = hasAcc + ng * 9 + clefW;
-        const w = 15 + Math.min(dur, 4) * 20 + acc;
+        let w = 15 + Math.min(dur, 4) * 20 + acc;
+        if (this.noStaff) {   // largura mínima pelo texto da cifra e da sílaba que começam neste tempo
+          let hw = 0, lw = 0;
+          for (const h of (m.harm || [])) if (h.q >= s - 1e-4 && h.q < next - 1e-4) hw += h.text.length * 7.6 + 8;
+          for (const n of notes) if (Math.abs(n.start - s) < 1e-4) for (const ly of (n.lyrics || [])) lw = Math.max(lw, ly.text.length * 6.2 + 12);
+          w = Math.max(w, hw, lw);
+        }
         return { s, dur, acc, hasAcc, ng, clefW, w };
       });
       let off = 0;
@@ -146,6 +154,7 @@
       const sc = this.score;
       if (!sc) return;
       const part = sc.parts[this.partIdx] || sc.parts[0];
+      this.noStaff = !!part.noStaff;      // pauta oculta (MusicXML staff-lines 0 / print-object="no"): só cifras e letra
       const nst = Math.max(1, part.staves || 1);
       let z = this.zoom;
       let availW = Math.max(240, this.box.clientWidth / z - 24);
@@ -159,7 +168,9 @@
       }
       this.R = hasHarm ? { chord: -36, words: -54, reh: -72 } : { chord: -28, words: -28, reh: -46 };
       this.topPad = hasHarm ? 92 : TOP_PAD;
-      this.botPad = BOT_PAD + 14 * (maxVerse - 1);
+      this.maxVerse = maxVerse;
+      // sem pauta a linha termina logo abaixo da letra (a pauta oculta ocupa STAFF_H, que é descontado aqui)
+      this.botPad = this.noStaff ? 14 * maxVerse - 32 : BOT_PAD + 14 * (maxVerse - 1);
       this.wedgeOpen = {}; this.octOpen = {}; this.octState = {}; this.pedalOpen = {};
 
       // largura de cada compasso (sem justificar) e quebra em sistemas
@@ -167,6 +178,7 @@
         const m = lays[i].m;
         const c1 = (m.clefs && m.clefs[1]) || { sign: 'G' };
         void c1;
+        if (this.noStaff) return 12;
         return 38 + Math.abs(m.key || 0) * 9 + (m.time ? 26 : 0) + 8;
       };
       const midChange = (i) => {
@@ -224,7 +236,7 @@
           S.clefs = S.clefs || {}; S.clefs[st] = clef;
         }
         let px = x + 4;
-        for (let st = 1; st <= nst; st++) {
+        for (let st = 1; st <= nst && !this.noStaff; st++) {
           const clef = S.clefs[st], yt = staffTop(st);
           out.push(this.clefSvg(clef, px, yt));
           const kp = keyPositions(firstM.key || 0, clef), base = clefBase(clef);
@@ -247,13 +259,13 @@
         });
         // linhas das pautas e barra inicial
         const lines = [];
-        for (let st = 1; st <= nst; st++) {
+        for (let st = 1; st <= nst && !this.noStaff; st++) {
           const yt = staffTop(st);
           for (let l = 0; l < 5; l++) lines.push('<line x1="' + f1(S.x0) + '" x2="' + f1(x) + '" y1="' + f1(yt + l * SP) + '" y2="' + f1(yt + l * SP) + '"/>');
         }
         out.unshift('<g stroke="currentColor" stroke-width="1" opacity="0.85">' + lines.join('') + '</g>');
-        out.push('<line x1="' + f1(S.x0) + '" x2="' + f1(S.x0) + '" y1="' + f1(y0) + '" y2="' + f1(yBottom) + '" stroke="currentColor" stroke-width="1.6"/>');
-        if (nst > 1) out.push('<path d="M' + f1(S.x0 - 3) + ',' + f1(y0) + ' C' + f1(S.x0 - 12) + ',' + f1(y0 + 20) + ' ' + f1(S.x0 - 12) + ',' + f1((y0 + yBottom) / 2 - 8) + ' ' + f1(S.x0 - 14) + ',' + f1((y0 + yBottom) / 2) + ' C' + f1(S.x0 - 12) + ',' + f1((y0 + yBottom) / 2 + 8) + ' ' + f1(S.x0 - 12) + ',' + f1(yBottom - 20) + ' ' + f1(S.x0 - 3) + ',' + f1(yBottom) + '" fill="none" stroke="currentColor" stroke-width="2"/>');
+        if (!this.noStaff) out.push('<line x1="' + f1(S.x0) + '" x2="' + f1(S.x0) + '" y1="' + f1(y0) + '" y2="' + f1(yBottom) + '" stroke="currentColor" stroke-width="1.6"/>');
+        if (nst > 1 && !this.noStaff) out.push('<path d="M' + f1(S.x0 - 3) + ',' + f1(y0) + ' C' + f1(S.x0 - 12) + ',' + f1(y0 + 20) + ' ' + f1(S.x0 - 12) + ',' + f1((y0 + yBottom) / 2 - 8) + ' ' + f1(S.x0 - 14) + ',' + f1((y0 + yBottom) / 2) + ' C' + f1(S.x0 - 12) + ',' + f1((y0 + yBottom) / 2 + 8) + ' ' + f1(S.x0 - 12) + ',' + f1(yBottom - 20) + ' ' + f1(S.x0 - 3) + ',' + f1(yBottom) + '" fill="none" stroke="currentColor" stroke-width="2"/>');
         S.x1 = x; S.startX = startX;
         totalW = Math.max(totalW, x + 20);
       });
@@ -341,7 +353,7 @@
       this.geo[i].X = X;
       // alterações no meio da linha
       let cx = mx + 8 + (cm.repeatStart ? 12 : 0);
-      if (!isFirst && i > 0) {
+      if (!isFirst && i > 0 && !this.noStaff) {
         for (let st = 1; st <= nst; st++) {
           if (m.newClefs && m.clefs[st]) out.push(this.clefSvg(m.clefs[st], cx - 4, staffTop(st)));
           let kx = cx + (m.newClefs ? 24 : 0);
@@ -360,11 +372,12 @@
       if (cm.repeatStart) out.push(vline(mx + 2, 4) + vline(mx + 7, 1) + dots(mx + 12));
       const rb = m.bar && m.bar.right;
       if (cm.repeatEnd) out.push(dots(xr - 13) + vline(xr - 7, 1) + vline(xr - 2, 4));
+      else if (this.noStaff || rb === 'none') { /* sem barra de compasso */ }
       else if (i === this.score.measures.length - 1 || rb === 'light-heavy') out.push(vline(xr - 6, 1) + vline(xr - 2, 4));
       else if (rb === 'light-light') out.push(vline(xr - 5, 1) + vline(xr, 1));
       else out.push(vline(xr, 1));
       // número do compasso
-      if (isFirst && !cm.ending) out.push('<text x="' + f1(mx + 6) + '" y="' + f1(yTop - 8) + '" font-size="10" fill="currentColor" opacity="0.6">' + esc(cm.number || (i + 1)) + '</text>');
+      if (isFirst && !cm.ending) out.push('<text x="' + f1(mx + 6) + '" y="' + f1(yTop - (this.noStaff ? 22 : 8)) + '" font-size="10" fill="currentColor" opacity="0.6">' + esc(cm.number || (i + 1)) + '</text>');
       // casas de repetição
       if (cm.ending) {
         const on = this.endingOn = true; void on;
@@ -508,11 +521,13 @@
         if (e.rest) {
           const n0 = e.notes[0];
           e.x = e.measureRest ? mx + w / 2 : e.x;
-          const dy = n0.pitch ? (yOf(dOf(n0)) - (yt + 2 * SP)) : 0;
+          if (this.noStaff || n0.hidden) continue;
+          const dy =n0.pitch ? (yOf(dOf(n0)) - (yt + 2 * SP)) : 0;
           out.push('<g transform="translate(0,' + f1(dy) + ')">' + this.restSvg(t, e.x, yt, e.measureRest) + '</g>');
           if (e.dots) out.push('<circle cx="' + f1(e.x + 9) + '" cy="' + f1(yt + 2 * SP - 3 + dy) + '" r="1.8" fill="currentColor"/>');
           continue;
         }
+        e.hid = this.noStaff || e.notes.every((n) => n.hidden);   // nota não impressa: só a letra aparece
         e.ds = e.notes.map((n) => dOf(n)).sort((a, b) => a - b);
         e.lo = e.ds[0]; e.hi = e.ds[e.ds.length - 1];
         const exp = e.notes.find((n) => n.stem === 'up' || n.stem === 'down');
@@ -522,7 +537,7 @@
       // grupos de barra
       const groups = []; let cur = null;
       for (const e of evs) {
-        if (e.rest || !BEAMS[e.t]) { cur = null; continue; }
+        if (e.rest || e.hid || !BEAMS[e.t]) { cur = null; continue; }
         const b1 = e.beams && e.beams['1'];
         if (b1 === 'begin') { cur = [e]; groups.push(cur); } else if (cur && (b1 === 'continue' || b1 === 'end') && cur[0].voice === e.voice) { cur.push(e); if (b1 === 'end') cur = null; } else cur = null;
       }
@@ -539,8 +554,16 @@
       }
       const sx = (e) => e.x + (e.dir === 'up' ? 5.3 : -5.3);
       // cabeças, acidentes, pontos, hastes
+      const pushLyrics = (e) => {
+        if (st !== nst) return;
+        for (const ly of e.lyrics) {
+          const tx = ly.text + (ly.syl === 'begin' || ly.syl === 'middle' ? ' -' : '');
+          out.push('<text x="' + f1(e.x) + '" y="' + f1((this.noStaff ? yt - 4 : yBottom + 42) + (ly.num - 1) * 14) + '" font-size="12" text-anchor="middle" fill="currentColor">' + esc(tx) + '</text>');
+        }
+      };
       for (const e of evs) {
         if (e.rest) continue;
+        if (e.hid) { pushLyrics(e); continue; }
         const open = e.t === 'whole' || e.t === 'half' || e.t === 'breve';
         const head = [];
         const sorted = e.notes.map((n) => ({ n, d: dOf(n) })).sort((a, b) => a.d - b.d);
@@ -557,6 +580,7 @@
           if (hk === 'x' || hk === 'cross' || hk === 'circle-x') head.push('<path d="M' + f1(hx - 4.5) + ',' + f1(y - 4.5) + ' L' + f1(hx + 4.5) + ',' + f1(y + 4.5) + ' M' + f1(hx - 4.5) + ',' + f1(y + 4.5) + ' L' + f1(hx + 4.5) + ',' + f1(y - 4.5) + '" stroke="currentColor" stroke-width="1.8" fill="none"/>');
           else if (hk === 'diamond') head.push('<polygon points="' + f1(hx) + ',' + f1(y - 5) + ' ' + f1(hx + 5) + ',' + f1(y) + ' ' + f1(hx) + ',' + f1(y + 5) + ' ' + f1(hx - 5) + ',' + f1(y) + '" ' + (open ? 'fill="none" stroke="currentColor" stroke-width="1.5"' : 'fill="currentColor"') + '/>');
           else if (hk === 'triangle') head.push('<polygon points="' + f1(hx) + ',' + f1(y - 5) + ' ' + f1(hx + 5) + ',' + f1(y + 4) + ' ' + f1(hx - 5) + ',' + f1(y + 4) + '" ' + (open ? 'fill="none" stroke="currentColor" stroke-width="1.5"' : 'fill="currentColor"') + '/>');
+          else if (hk === 'none') { /* notehead none: sem cabeça */ }
           else if (e.t !== 'whole') head.push('<ellipse cx="' + f1(hx) + '" cy="' + f1(y) + '" rx="5.6" ry="4" transform="rotate(-20 ' + f1(hx) + ' ' + f1(y) + ')" ' + (open ? 'fill="none" stroke="currentColor" stroke-width="1.6"' : 'fill="currentColor"') + '/>');
           else head.push('<ellipse cx="' + f1(hx) + '" cy="' + f1(y) + '" rx="6.6" ry="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/>');
           // linhas suplementares
@@ -568,7 +592,7 @@
         }
         out.push(head.join(''));
         // haste
-        if (e.t !== 'whole' && e.t !== 'breve') {
+        if (e.t !== 'whole' && e.t !== 'breve' && !e.notes.some((n) => n.stem === 'none')) {
           const x = sx(e);
           const yA = e.dir === 'up' ? yOf(e.lo) : yOf(e.hi);       // lado da cabeça de onde parte a haste
           let yE;
@@ -587,10 +611,7 @@
           }
         }
         // letra (apenas pauta única)
-        if (st === nst) for (const ly of e.lyrics) {
-          const tx = ly.text + (ly.syl === 'begin' || ly.syl === 'middle' ? ' -' : '');
-          out.push('<text x="' + f1(e.x) + '" y="' + f1(yBottom + 42 + (ly.num - 1) * 14) + '" font-size="12" text-anchor="middle" fill="currentColor">' + esc(tx) + '</text>');
-        }
+        pushLyrics(e);
         this.drawMarks(out, e, st, yt, yOf, dOf);
       }
       this.drawGraces(out, L, st, X, yOf, dOf, allSt);
@@ -742,7 +763,9 @@
       const g = this.geo[m];
       if (!g) return { x: 0, sys: 0, top: 0, bottom: 0 };
       const S = this.systems[g.sys];
-      return { x: g.ix + this.slotX(g.lay, Math.min(Math.max(q, 0), g.lay.lenQ), g.scl), sys: g.sys, top: S.top + TP - 30, bottom: S.yb + 16, mx: g.x, mw: g.w };
+      const top = this.noStaff ? S.y0 - 50 : S.top + TP - 30;
+      const bottom = this.noStaff ? S.y0 + 14 * (this.maxVerse || 1) - 12 : S.yb + 16;
+      return { x: g.ix + this.slotX(g.lay, Math.min(Math.max(q, 0), g.lay.lenQ), g.scl), sys: g.sys, top, bottom, mx: g.x, mw: g.w };
     }
 
     setCursor(pos, follow) {

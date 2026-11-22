@@ -188,6 +188,9 @@
         if (tag === 'attributes') {
           const dv = num(el, 'divisions', NaN); if (Number.isFinite(dv) && dv > 0) div = dv;
           const st = num(el, 'staves', NaN); if (Number.isFinite(st)) part.staves = Math.max(part.staves, st);
+          // pauta oculta (staff-lines 0 ou print-object="no"): vista só com cifras e letra
+          const sdet = kid(el, 'staff-details');
+          if (sdet && (num(sdet, 'staff-lines', 5) === 0 || sdet.getAttribute('print-object') === 'no')) part.noStaff = true;
           const cl = kids(el, 'clef');
           const atStart = pos === 0;
           if (cl.length) {
@@ -223,6 +226,7 @@
             stem: text(el, 'stem', ''), accidental: text(el, 'accidental', ''), beams: {}, tie: [], slur: [], tuplet: null, tupletMark: null,
             staccato: false, fermata: false, lyric: '', lyrics: [], marks: [], graceSlash: false,
             head: text(el, 'notehead', ''), cue: !!kid(el, 'cue'), staffChange: false,
+            hidden: el.getAttribute('print-object') === 'no',
           };
           if (grace) n.graceSlash = kid(el, 'grace').getAttribute('slash') === 'yes';
           if (rest) {

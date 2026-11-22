@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <work><work-title>Natal</work-title></work>
+  <identification>
+    <encoding><software>Cifra para MusicXML</software><encoding-date>2026-11-22</encoding-date></encoding>
+  </identification>
+  <part-list><score-part id="P1"><part-name>Voz</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>2</divisions>
+        <key print-object="no"><fifths>-3</fifths><mode>major</mode></key>
+        <time print-object="no"><beats>4</beats><beat-type>4</beat-type></time>
+        <clef print-object="no"><sign>G</sign><line>2</line></clef>
+        <staff-details print-object="no"><staff-lines>0</staff-lines></staff-details>
+      </attributes>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>90</per-minute></metronome></direction-type><sound tempo="90"/></direction>
+      <direction placement="above"><direction-type><rehearsal>Intro</rehearsal></direction-type></direction>
+      <harmony>
+        <root><root-step>E</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>B</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="2">
+      <harmony>
+        <root><root-step>A</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="3">
+      <harmony>
+        <root><root-step>E</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+        <bass><bass-step>G</bass-step></bass>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m">minor</kind>
+        <bass><bass-step>A</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>A</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+        <bass><bass-step>B</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="4">
+      <print new-system="yes"/>
+      <harmony>
+        <root><root-step>E</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>A</root-step><root-alter>-1</root-alter></root>
+        <kind text="maj7">major-seventh</kind>
+        <bass><bass-step>B</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="5">
+      <harmony>
+        <root><root-step>A</root-step><root-alter>-1</root-alter></root>
+        <kind>dominant-13th</kind>
+        <degree><degree-value>11</degree-value><degree-alter>1</degree-alter><degree-type>add</degree-type></degree>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>dominant</kind>
+        <degree><degree-value>9</degree-value><degree-alter>1</degree-alter><degree-type>add</degree-type></degree>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="6">
+      <harmony>
+        <root><root-step>E</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+        <bass><bass-step>G</bass-step></bass>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m">minor</kind>
+        <bass><bass-step>A</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <harmony>
+        <root><root-step>D</root-step><root-alter>-1</root-alter></root>
+        <kind text="maj9">major-ninth</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="7">
+      <print new-system="yes"/>
+      <direction placement="above"><direction-type><rehearsal>Estrofe</rehearsal></direction-type></direction>
+      <harmony>
+        <root><root-step>E</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>Eu</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>quero</text></lyric></note>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>te</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="8">
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>louvar</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>e</text></lyric></note>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>neste</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>dia</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="9">
+      <harmony>
+        <root><root-step>A</root-step><root-alter>-1</root-alter></root>
+        <kind text="maj7">major-seventh</kind>
+        <bass><bass-step>B</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>vou</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>can</text></lyric></note>
+      <harmony>
+        <root><root-step>B</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+        <bass><bass-step>A</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>tar</text></lyric></note>
+      <forward><duration>2</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="10">
+      <print new-system="yes"/>
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <forward><duration>2</duration></forward>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>Glória,</text></lyric></note>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>Glória</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>nas</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="11">
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>al</text></lyric></note>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m7">minor-seventh</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>middle</syllabic><text>tu</text></lyric></note>
+      <harmony>
+        <root><root-step>E</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+        <bass><bass-step>G</bass-step></bass>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>ras,</text></lyric></note>
+      <harmony>
+        <root><root-step>F</root-step></root>
+        <kind text="m">minor</kind>
+        <bass><bass-step>A</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>in</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="12">
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>ex</text></lyric></note>
+      <harmony>
+        <root><root-step>B</root-step><root-alter>-1</root-alter></root>
+        <kind>major</kind>
+        <bass><bass-step>A</bass-step><bass-alter>-1</bass-alter></bass>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>middle</syllabic><text>cel</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>sis</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>Deo</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+  </part>
+</score-partwise>
