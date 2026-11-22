@@ -93,11 +93,11 @@ main > *, .tab > * { min-width: 0; }
 #score-timeline[hidden] { display: none !important; }
 #score-timeline { align-items: center; }
 #score.stage { position: fixed; inset: 0; z-index: 50; margin: 0; border-radius: 0; background: var(--bg, #fff); padding: 6px; overflow: auto; }
-#score.stage #score-timeline, #score.stage #score-info, #score.stage h2, #score.stage #score-part { display: none !important; }
-#score.stage .row { position: fixed; right: 10px; bottom: 14px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
+#score.stage #score-timeline, #score.stage #score-marks, #score.stage #marks-bar, #score.stage #score-info, #score.stage h2, #score.stage #score-part { display: none !important; }
+#score.stage .row.tb { position: fixed; right: 10px; bottom: 14px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
 #score.stage #score-view, #score.stage #score-view.pages { height: calc(100vh - 12px); }
 #score .row button.rbtn { width: 44px; height: 44px; min-height: 44px; min-width: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-weight: 700; }
-#score.stage .row button.rbtn, body.stage-page .row button.rbtn { opacity: .85; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+#score.stage .row.tb button.rbtn, body.stage-page .row.tb button.rbtn { opacity: .85; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
 #score-marks[hidden], #marks-bar[hidden] { display: none !important; }
 #score-marks, #marks-bar { align-items: center; gap: 8px; }
 

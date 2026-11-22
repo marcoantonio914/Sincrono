@@ -12,9 +12,9 @@
       #score h2 { display: none; }
       #score-view, #score-view.pages { height: calc(100vh - 118px); min-height: 160px; }
       body.stage-page #score-view, body.stage-page #score-view.pages { height: calc(100vh - 56px); }
-      body.stage-page #score-info, body.stage-page #score-timeline, body.stage-page #score-part, body.stage-page #score-stage { display: none !important; }
+      body.stage-page #score-info, body.stage-page #score-timeline, body.stage-page #score-marks, body.stage-page #marks-bar, body.stage-page #score-part, body.stage-page #score-stage { display: none !important; }
       body.stage-page #score-view, body.stage-page #score-view.pages { height: 100vh; }
-      body.stage-page .row { position: fixed; top: 8px; left: 8px; z-index: 60; display: flex; gap: 8px; }
+      body.stage-page .row.tb { position: fixed; top: 8px; left: 8px; z-index: 60; display: flex; gap: 8px; }
     </style>
   </head>
   <body>
@@ -22,7 +22,7 @@
       <div class="tab" data-tab="score">
       <section id="score" class="offset" aria-label="Partitura" hidden>
         <h2>Partitura</h2>
-        <div class="row">
+        <div class="row tb">
           <select id="score-part" class="grow" aria-label="Minha parte"></select>
           <button id="score-mode" type="button" class="rbtn" title="Visualização (toque para trocar)" aria-label="Visualização"></button>
           <button id="score-zoom-out" type="button" class="rbtn" aria-label="Diminuir" title="Diminuir">A−</button>

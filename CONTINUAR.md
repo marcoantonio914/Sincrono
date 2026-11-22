@@ -186,6 +186,11 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Teste antigo `teste_partitura_pagina.py` atualizado: o convidado não tem seletor de parte (regra da v22).
 - Limite conhecido: o espaço vertical entre linhas na vista sem pauta ainda reserva a altura da pauta oculta (linhas bem afastadas no celular).
 
+## 9j. v24 — correção: "Marcar compassos" cobria os botões no modo palco (Kotlin sem mudança)
+
+- Causa: na v22 toda `.row` virava flutuante no palco, inclusive as linhas de marcar compassos. Agora só a barra de visualização (`.row.tb`) flutua; as linhas de marcação e a linha do tempo ficam ocultas no palco.
+- Teste: `tools/teste_palco_quebras.py` confere que as linhas de marcação não aparecem no palco e que os botões não se sobrepõem.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -212,3 +217,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v21: ícone, metrônomo no visual da playlist, Tocar único na playlist, configuração que não some, modo palco à vista.
 - v22: palco com várias linhas, visualização "como na partitura", parte só do anfitrião, botões redondos, Nova música.
 - v23: partitura só com cifra e letra (pauta oculta), patch do usuário.
+- v24: correção do palco (Marcar compassos cobria os botões).
