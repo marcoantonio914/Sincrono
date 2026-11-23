@@ -87,6 +87,7 @@ async function pollMix() {
         const wanted = info.assign && info.assign[deviceId];
         if (wanted && (info.groups || []).some((x) => x.id === wanted)) group = wanted;
         window.sincronoGroupNames = Object.fromEntries((info.groups || []).map((x) => [x.id, x.name]));
+        if (window.sincronoSetGroupColors) window.sincronoSetGroupColors(info.groups);
       }
     } catch { /* servidor sem grupos */ }
     setSongGroup(group);

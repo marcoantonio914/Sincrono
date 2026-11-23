@@ -196,6 +196,9 @@ object SessionController {
             saved.optJSONObject("names")?.let { o -> o.keys().forEach { k -> names[k] = o.optString(k) } }
             saved.optJSONObject("assign")?.let { o -> o.keys().forEach { k -> assign[k] = o.optString(k) } }
             srv.groups.restore(names, assign)
+            val colors = HashMap<String, String>()
+            saved.optJSONObject("colors")?.let { o -> o.keys().forEach { k -> colors[k] = o.optString(k) } }
+            srv.groups.restoreColors(colors)
         }
         srv.onGroupsChanged = {
             val o = JSONObject()
@@ -203,7 +206,9 @@ object SessionController {
             srv.groups.ids().filter { it != "g1" }.forEach { names.put(it, srv.groups.name(it)) }
             val assign = JSONObject()
             srv.groups.assignments().forEach { (k, v) -> assign.put(k, v) }
-            hostPrefs.edit().putString(KEY_GROUPS, o.put("names", names).put("assign", assign).toString()).apply()
+            val colors = JSONObject()
+            srv.groups.colorChoices().forEach { (k, v) -> colors.put(k, v) }
+            hostPrefs.edit().putString(KEY_GROUPS, o.put("names", names).put("assign", assign).put("colors", colors).toString()).apply()
         }
         _score.value = ScoreInfo()
         srv.onScoreChanged = { _score.value = srv.scoreInfo() }
@@ -477,6 +482,8 @@ object SessionController {
     fun addGroup(name: String) = groupOp { put("op", "add").put("name", name) }
     fun renameGroup(id: String, name: String) = groupOp { put("op", "rename").put("id", id).put("name", name) }
     fun removeGroup(id: String) = groupOp { put("op", "remove").put("id", id) }
+    /** Anfitrião: escolhe a cor do grupo (#rrggbb); a mesma cor aparece em todos os aparelhos. */
+    fun setGroupColor(id: String, hex: String) = groupOp { put("op", "color").put("id", id).put("color", hex) }
 
     /** Anfitrião: escolhe a parte da partitura que o grupo [groupId] vê (os clientes do grupo passam a ver na hora). */
     fun setScorePart(groupId: String, part: Int) {
@@ -721,6 +728,13 @@ object SessionController {
 
     /** Executa uma operação do repertório ({"op": ...}); devolve (status HTTP, resposta). Chame fora da thread principal. */
     fun setlistOp(body: JSONObject): Pair<Int, JSONObject> = server?.setlist?.op(body)
+        ?: Pair(404, JSONObject().put("error", "Repertório indisponível."))
+
+    /** Grava num arquivo .sincro a playlist toda ([ids] = null) ou só as músicas indicadas. Devolve quantas músicas foram. Fora da thread principal. */
+    fun setlistExport(out: java.io.OutputStream, ids: Set<Int>?): Int = server?.setlist?.exportTo(out, ids) ?: 0
+
+    /** Abre um arquivo .sincro: junta à playlist ou, com [replace], troca a playlist toda. Fora da thread principal. */
+    fun setlistImport(input: java.io.InputStream, replace: Boolean): Pair<Int, JSONObject> = server?.setlist?.importFrom(input, replace)
         ?: Pair(404, JSONObject().put("error", "Repertório indisponível."))
 
     fun scoreTick(): String {

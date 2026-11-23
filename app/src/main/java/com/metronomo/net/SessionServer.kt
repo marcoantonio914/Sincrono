@@ -524,7 +524,7 @@ class SessionServer(
         respond(out, reply.status, reply.json, close)
     }
 
-    /** {"rev":N,"groups":[{"id","name","file","playing"}],"assign":{"dispositivo":"grupo"}} */
+    /** {"rev":N,"groups":[{"id","name","file","playing","color"}],"assign":{"dispositivo":"grupo"}} */
     private fun groupsJson(): String {
         val arr = org.json.JSONArray()
         for (id in groups.ids()) {
@@ -534,7 +534,8 @@ class SessionServer(
                     .put("id", id)
                     .put("name", groups.name(id))
                     .put("file", h?.fileName() ?: JSONObject.NULL)
-                    .put("playing", h?.isPlaying() ?: false),
+                    .put("playing", h?.isPlaying() ?: false)
+                    .put("color", groups.color(id) ?: com.metronomo.diag.Groups.defaultColor(id)),
             )
         }
         val assign = JSONObject()
@@ -566,6 +567,7 @@ class SessionServer(
                 removed
             }
             "assign" -> groups.assign(body.optString("device"), body.optString("group"))
+            "color" -> groups.setColor(body.optString("id"), body.optString("color"))
             else -> false
         }
         if (!ok) {

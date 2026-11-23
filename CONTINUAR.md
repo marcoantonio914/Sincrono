@@ -247,3 +247,16 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v26: modo Página (vira sozinha) e diagrama de conexão.
 - v27: cor por grupo.
 - v28: correção de compilação (botão de grupo colorido).
+
+### 9o. v29 — cor de cada grupo escolhida pelo anfitrião + arquivo `.sincro` (música ou playlist)
+
+**Cores.** Cada grupo tem cor padrão (paleta de 10 pelo número do id) e o anfitrião pode trocar (bolinhas + seletor na tela de grupos, no PC e no app). A cor fica no grupo (`group_colors`), vai em `/api/groups` (`color`), aparece em todos os aparelhos (nome do grupo, moldura e rótulo "Grupo: nome" na partitura, também no modo palco) e é guardada em cada música da playlist (ao carregar a música, as cores voltam). Músicas antigas sem cores guardadas usam as de agora. Op: `POST /api/groups {op:'color', id, color:'#rrggbb'}`.
+
+**Arquivo `.sincro`.** Zip (sem compressão) com `sincro.json` {format:"sincro", version:1, songs:[{name,bpm,beats,marks,parts,colors,score:{name,size}|null,audio:[{group,file,name,mime,size}]}]} + `song-N/score.bin` + `song-N/audio-K.bin`. Áudio mantido como está (FLAC/WAV: nada é convertido). Endpoints do PC: `GET /api/setlist/export?ids=1,2&name=...` (sem ids = playlist toda) e `POST /api/setlist/import?mode=add|replace` (corpo = o arquivo). Na importação: só aceita nomes de arquivo esperados, limites de tamanho (cada item `MAX_UPLOAD`, total 2 GB, ≤5000 entradas, ≤200 músicas), nomes limpos, dados estranhos ignorados; `replace` recusa com 409 se algo toca. Grupos são recriados pelo NOME.
+
+**Na página (PC e celular pelo navegador):** aba PLAYLIST tem "Salvar playlist (.sincro)", "Abrir .sincro" (juntar/substituir) e, no menu de cada música, "Salvar esta música".
+**No app Android (anfitrião):** mesma coisa na aba PLAYLIST, usando o seletor de arquivos do sistema (`Setlist.exportTo/importFrom`, `SessionController.setlistExport/setlistImport`).
+
+**Testes (tools/):** `teste_sincro.py`, `teste_sincro_pagina.py`, `teste_cor_grupo.py` — passam, junto com todos os anteriores.
+
+**Honestidade:** o Kotlin da v29 (e o da v28) NÃO foi compilado por mim; só Python/web foram testados. Se `python3 build_apk.py` reclamar, mande o erro. O servidor HTTP do app não oferece export/import por navegador (só os botões do app). Não existe ainda abrir `.sincro` direto do gerenciador de arquivos (intent-filter) nem ajuste manual de atraso para fone Bluetooth.

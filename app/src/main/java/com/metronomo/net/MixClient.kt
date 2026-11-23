@@ -100,7 +100,7 @@ class MixClient(
         if (arr != null) {
             for (i in 0 until arr.length()) {
                 val g = arr.getJSONObject(i)
-                groups.add(GroupInfo(g.getString("id"), g.optString("name"), if (g.isNull("file")) null else g.optString("file"), g.optBoolean("playing")))
+                groups.add(GroupInfo(g.getString("id"), g.optString("name"), if (g.isNull("file")) null else g.optString("file"), g.optBoolean("playing"), g.optString("color")))
             }
         }
         val assign = HashMap<String, String>()

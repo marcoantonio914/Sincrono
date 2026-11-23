@@ -26,7 +26,7 @@ try:
         pg.on("pageerror", lambda e: erros.append(str(e)))
         pg.goto(B + "/"); pg.wait_for_timeout(500)
         if pg.is_visible("#start-host"): pg.click("#start-host")
-        pg.click('#tabs [data-go="music"]') if pg.locator('#tabs [data-go="music"]').count() else None
+        pg.click('#tabs [data-go="audio"]') if pg.locator('#tabs [data-go="audio"]').count() else None
         pg.wait_for_selector("#groups-list .group", state="attached", timeout=8000)
         cores = pg.evaluate("[...document.querySelectorAll('#groups-list .group')].map(g=>getComputedStyle(g).borderLeftColor)")
         check("cada grupo tem uma cor diferente", len(set(cores)) == len(cores) and len(cores) >= 3, cores)
@@ -37,6 +37,16 @@ try:
         pg.click('#tabs [data-go="sync"]'); pg.wait_for_function("document.getElementById('score-grp') && document.getElementById('score-grp').textContent.includes('Soprano')", timeout=20000)
         txt = pg.inner_text("#score-grp"); bc = pg.evaluate("getComputedStyle(document.getElementById('score-view')).borderTopColor")
         check("etiqueta com o nome do grupo", "Soprano" in txt, txt)
+        # o anfitrião escolhe outra cor para o grupo: a moldura muda sozinha, sem recarregar
+        api("/api/groups", {"op": "color", "id": "g2", "color": "#e11d48"})
+        pg.wait_for_function("getComputedStyle(document.getElementById('score-view')).borderTopColor === 'rgb(225, 29, 72)'", timeout=15000)
+        check("cor escolhida pelo anfitrião chega à moldura da partitura", True)
+        pg.click('#tabs [data-go="audio"]') if pg.locator('#tabs [data-go="audio"]').count() else None
+        sw = pg.evaluate("document.querySelectorAll('#groups-list .group .swatch').length")
+        check("cartão do grupo tem as cores para escolher", sw >= 10, sw)
+        pg.click('#groups-list .group:nth-of-type(2) .swatch:nth-of-type(4)'); pg.wait_for_timeout(800)
+        gcol = api("/api/groups")["groups"][1]["color"]
+        check("clicar numa cor muda a cor do grupo no servidor", gcol == "#0f766e", gcol)
         check("moldura da partitura na cor do grupo", bc == rgb("#1d4ed8"), bc)
         check("sem erros de JS", not erros, erros)
         b.close()

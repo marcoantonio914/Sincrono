@@ -74,6 +74,7 @@
       g.hidden = !nm || stage; g.textContent = nm ? 'Grupo: ' + nm : ''; g.style.background = col;
     }
   }
+  window.sincronoRepaintGroup = () => { try { paintGroup(); } catch { /* ainda sem partitura */ } };
   function draw() {
     if (!score) return;
     const m = curMode();

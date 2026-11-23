@@ -1,5 +1,7 @@
 package com.metronomo.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.metronomo.SessionController
@@ -54,6 +57,52 @@ fun SetlistCard() {
     var message by remember { mutableStateOf("") }
     var newName by remember { mutableStateOf("") }
     var renaming by remember { mutableStateOf<Pair<Int, String>?>(null) }   // (id, nome atual) da música sendo renomeada
+
+    val ctx = LocalContext.current
+    var exportIds by remember { mutableStateOf<Set<Int>?>(null) }      // null = a playlist toda
+    var pendingImport by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    // Salvar .sincro: o sistema pergunta onde gravar
+    val saver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) {
+            val ids = exportIds
+            scope.launch {
+                message = "Gravando o arquivo…"
+                val n = withContext(Dispatchers.IO) {
+                    runCatching { ctx.contentResolver.openOutputStream(uri)?.use { SessionController.setlistExport(it, ids) } ?: -1 }.getOrDefault(-1)
+                }
+                message = if (n > 0) "Arquivo .sincro gravado ($n ${if (n == 1) "música" else "músicas"})." else "Não foi possível gravar o arquivo."
+            }
+        }
+    }
+    // Abrir .sincro: escolhe o arquivo e depois pergunta se junta ou substitui
+    val opener = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) pendingImport = uri }
+    fun doImport(uri: android.net.Uri, replace: Boolean) {
+        scope.launch {
+            message = "Abrindo o arquivo…"
+            val r = withContext(Dispatchers.IO) {
+                runCatching { ctx.contentResolver.openInputStream(uri)?.use { SessionController.setlistImport(it, replace) } }.getOrNull()
+            }
+            if (r == null) message = "Não foi possível ler o arquivo."
+            else if (r.first == 200) { message = "Arquivo aberto: ${r.second.optInt("added")} música(s)."; data = r.second }
+            else message = r.second.optString("error", "Arquivo inválido.")
+        }
+    }
+    pendingImport?.let { uri ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("Abrir arquivo .sincro") },
+            text = { Text("Juntar as músicas do arquivo à playlist atual, ou substituir a playlist toda? (Substituir só com tudo parado.)") },
+            confirmButton = { TextButton(onClick = { pendingImport = null; doImport(uri, false) }) { Text("Juntar") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { pendingImport = null; doImport(uri, true) }) { Text("Substituir", color = Pal.Bad) }
+                    TextButton(onClick = { pendingImport = null }) { Text("Cancelar") }
+                }
+            },
+        )
+    }
+    fun exportSongs(ids: Set<Int>?, fileName: String) { exportIds = ids; saver.launch(fileName) }
 
     fun refresh() {
         scope.launch { data = withContext(Dispatchers.IO) { SessionController.setlistJson() } }
@@ -183,6 +232,7 @@ fun SetlistCard() {
                         DropdownMenuItem(text = { Text("Descer") }, enabled = i < count - 1, onClick = { menu = false; run(JSONObject().put("op", "move").put("id", id).put("dir", 1), "") })
                         DropdownMenuItem(text = { Text("Renomear") }, onClick = { menu = false; renaming = Pair(id, m.getString("name")) })
                         DropdownMenuItem(text = { Text("Atualizar com o atual") }, onClick = { menu = false; run(JSONObject().put("op", "update").put("id", id), "Música atualizada.") })
+                        DropdownMenuItem(text = { Text("Salvar esta música (.sincro)") }, onClick = { menu = false; exportSongs(setOf(id), m.getString("name").replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().ifEmpty { "musica" } + ".sincro") })
                         DropdownMenuItem(text = { Text("Remover", color = Pal.Bad) }, onClick = { menu = false; run(JSONObject().put("op", "remove").put("id", id), "Música removida.") })
                     }
                 }
@@ -198,6 +248,10 @@ fun SetlistCard() {
         }
         Button(onClick = { run(JSONObject().put("op", "add").put("name", newName), "Música adicionada à playlist.") { newName = "" } }, modifier = Modifier.fillMaxWidth()) {
             Text("+ Adicionar a música atual")
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { exportSongs(null, "playlist.sincro") }, enabled = count > 0, modifier = Modifier.weight(1f)) { Text("Salvar playlist (.sincro)") }
+            OutlinedButton(onClick = { opener.launch(arrayOf("*/*")) }, modifier = Modifier.weight(1f)) { Text("Abrir .sincro") }
         }
         if (message.isNotEmpty()) Text(message, color = Pal.Graphite, style = MaterialTheme.typography.bodySmall)
         Text("Cada música guarda a partitura, o áudio de cada grupo, a parte de cada grupo, o andamento e os marcadores. Só troca com tudo parado.", color = Pal.Graphite, style = MaterialTheme.typography.bodySmall)

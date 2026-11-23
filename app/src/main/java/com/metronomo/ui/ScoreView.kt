@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun ScoreWebView(baseUrl: String, height: Dp, host: Boolean = false, stage: Boolean = false, modifier: Modifier = Modifier) {
     val ref = remember { arrayOfNulls<WebView>(1) }
+    var lastGroups by remember { mutableStateOf("") }
     AndroidView(
         modifier = if (stage) modifier.fillMaxSize() else modifier.fillMaxWidth().height(height),
         factory = { ctx ->
@@ -50,6 +51,15 @@ fun ScoreWebView(baseUrl: String, height: Dp, host: Boolean = false, stage: Bool
     LaunchedEffect(Unit) {
         while (true) {
             ref[0]?.evaluateJavascript("window.sincronoTick&&window.sincronoTick(${SessionController.scoreTick()})", null)
+            // cores e nomes dos grupos (a página usa para a moldura e o rótulo "Grupo: nome")
+            val gl = SessionController.groups.value.groups
+            val key = gl.joinToString("|") { it.id + it.name + it.color }
+            if (key != lastGroups) {
+                val arr = org.json.JSONArray()
+                gl.forEach { g -> arr.put(org.json.JSONObject().put("id", g.id).put("name", g.name).put("color", groupHex(g))) }
+                // só marca como enviado quando a página já carregou (devolve 1); senão tenta de novo no próximo ciclo
+                ref[0]?.evaluateJavascript("(window.sincronoSetGroupColors?(window.sincronoSetGroupColors($arr),1):0)") { if (it == "1") lastGroups = key }
+            }
             delay(50)
         }
     }

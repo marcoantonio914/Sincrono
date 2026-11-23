@@ -22,6 +22,8 @@ Limitações desta versão (honestas):
 """
 
 import argparse
+import tempfile
+import zipfile
 import json
 import os
 import queue
@@ -56,6 +58,18 @@ def _wanted_start(body, now, default, past_ms=500.0):
 AUDIO_STOP_MS = 1200.0  # antecedência da parada agendada
 PEER_TTL_MS = 6000.0
 MAX_GROUPS = 16
+MAX_IMPORT = 2_000_000_000   # arquivo .sincro inteiro
+GROUP_COLORS = ["#475569", "#1d4ed8", "#b45309", "#0f766e", "#7c3aed", "#be123c", "#15803d", "#be185d", "#0369a1", "#a16207"]
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def default_color(gid):
+    # igual a web/groupcolor.js: vem do número do id (g1, g2…); Geral = cinza
+    try:
+        n = int(re.sub(r"\D", "", str(gid)) or 1)
+    except ValueError:
+        n = 1
+    return GROUP_COLORS[(n - 1) % len(GROUP_COLORS)]
 DEFAULT_GROUP = "g1"
 MAX_UPLOAD = 300_000_000
 MAX_SCORE = 30_000_000   # partituras (MusicXML/MXL) são pequenas
@@ -248,6 +262,7 @@ class Session:
         self.state_clients = []          # filas de eventos do metrônomo
         self.audio_clients = []          # (grupo, fila)
         self.group_names = {DEFAULT_GROUP: "Geral"}
+        self.group_colors = {}           # cor escolhida pelo anfitrião (id -> #rrggbb); sem escolha vale a cor padrão
         self.group_next = 2
         self.assign = {}
         self.group_rev = 1
@@ -379,7 +394,8 @@ class Session:
             for gid, name in self.group_names.items():
                 h = self.hubs.get(gid)
                 groups.append({"id": gid, "name": name, "file": h.file_name() if h else None,
-                               "playing": h.is_playing() if h else False})
+                               "playing": h.is_playing() if h else False,
+                               "color": self.group_colors.get(gid) or default_color(gid)})
             return {"rev": self.group_rev, "groups": groups, "assign": dict(self.assign)}
 
     def group_op(self, body):
@@ -397,11 +413,17 @@ class Session:
                 if not name or gid not in self.group_names:
                     return False
                 self.group_names[gid] = name
+            elif op == "color":
+                gid, col = body.get("id"), body.get("color")
+                if gid not in self.group_names or not isinstance(col, str) or not COLOR_RE.match(col):
+                    return False
+                self.group_colors[gid] = col.lower()
             elif op == "remove":
                 gid = body.get("id")
                 if gid == DEFAULT_GROUP or gid not in self.group_names:
                     return False
                 del self.group_names[gid]
+                self.group_colors.pop(gid, None)
                 self.score_parts.pop(gid, None)
                 self.assign = {d: g for d, g in self.assign.items() if g != gid}
                 h = self.hubs.pop(gid, None)
@@ -452,8 +474,11 @@ class Session:
         self.rep_seq += 1
         return self.cache_dir / ("%s-%d-%d.bin" % (prefix, int(time.time() * 1000), self.rep_seq))
 
-    def _rep_fp(self, score, audio, parts, bpm, beats, marks):
-        return json.dumps({"score": score, "audio": sorted(audio), "parts": sorted(parts), "bpm": bpm, "beats": beats, "marks": marks}, sort_keys=True)
+    def _rep_fp(self, score, audio, parts, bpm, beats, marks, colors):
+        return json.dumps({"score": score, "audio": sorted(audio), "parts": sorted(parts), "bpm": bpm, "beats": beats, "marks": marks, "colors": sorted(colors)}, sort_keys=True)
+
+    def _live_colors(self):
+        return [[n, self.group_colors.get(g) or default_color(g)] for g, n in self.group_names.items()]
 
     def _rep_fp_live(self):
         sc = self.score
@@ -461,7 +486,7 @@ class Session:
             [sc["name"], sc["size"]] if sc else None,
             [[self.group_names[g], h.file["name"], h.file["size"]] for g, h in self.hubs.items() if h.file and g in self.group_names],
             [[self.group_names[g], i] for g, i in self.score_parts.items() if g in self.group_names],
-            self.state["bpm"], self.state["beatsPerBar"], self.score_marks)
+            self.state["bpm"], self.state["beatsPerBar"], self.score_marks, self._live_colors())
 
     def _rep_fp_song(self, m):
         sc = m.get("score")
@@ -469,7 +494,8 @@ class Session:
             [sc["name"], sc["size"]] if sc else None,
             [[a["group"], a["name"], a["size"]] for a in m.get("audio", [])],
             [[g, i] for g, i in m.get("parts", {}).items()],
-            m.get("bpm"), m.get("beats"), m.get("marks", {}))
+            m.get("bpm"), m.get("beats"), m.get("marks", {}),
+            [[n, c] for n, c in m["colors"].items()] if "colors" in m else self._live_colors())
 
     def _rep_has_config(self):
         return bool(self.score) or any(h.has_file() for h in self.hubs.values())
@@ -537,6 +563,7 @@ class Session:
         m["bpm"] = self.state["bpm"]
         m["beats"] = self.state["beatsPerBar"]
         m["marks"] = json.loads(json.dumps(self.score_marks))
+        m["colors"] = {n: (self.group_colors.get(g) or default_color(g)) for g, n in self.group_names.items()}
 
     def rep_op(self, body):
         # operações do repertório; devolve (status, resposta)
@@ -625,6 +652,119 @@ class Session:
             return 200, self.rep_json()
         return 400, {"error": "Operação inválida."}
 
+    # ---- arquivo .sincro: zip com sincro.json + song-N/score.bin + song-N/audio-K.bin (uma música ou a playlist toda)
+    def rep_export(self, ids=None):
+        """Monta o .sincro num arquivo temporário e devolve o caminho. ids=None -> playlist toda."""
+        with self.lock:
+            songs = [m for m in self.rep["songs"] if ids is None or m["id"] in ids]
+            if not songs:
+                return None
+            snap = json.loads(json.dumps(songs))
+            dirs = [self.rep_dir / ("song-%d" % m["id"]) for m in songs]
+        tmp = tempfile.NamedTemporaryFile(prefix="sincro-", suffix=".sincro", dir=str(self.cache_dir), delete=False)
+        tmp.close()
+        out = []
+        with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
+            for i, (m, d) in enumerate(zip(snap, dirs), 1):
+                e = {"name": m["name"], "bpm": m.get("bpm"), "beats": m.get("beats"), "marks": m.get("marks", {}),
+                     "parts": m.get("parts", {}), "colors": m.get("colors", {}), "score": None, "audio": []}
+                sc = m.get("score")
+                if sc and (d / sc["file"]).exists():
+                    z.write(d / sc["file"], "song-%d/score.bin" % i)
+                    e["score"] = {"name": sc["name"], "size": sc.get("size", 0)}
+                for k, a in enumerate(m.get("audio", []), 1):
+                    if (d / a["file"]).exists():
+                        z.write(d / a["file"], "song-%d/audio-%d.bin" % (i, k))
+                        e["audio"].append({"group": a["group"], "file": "audio-%d.bin" % k, "name": a["name"], "mime": a.get("mime", "application/octet-stream"), "size": a.get("size", 0)})
+                out.append(e)
+            z.writestr("sincro.json", json.dumps({"format": "sincro", "version": 1, "songs": out}, ensure_ascii=False))
+        return tmp.name
+
+    @staticmethod
+    def _clean_name(v, n):
+        return re.sub(r"[\x00-\x1f/\\]", "", str(v)).strip()[:n]
+
+    def rep_import(self, path, mode):
+        """Lê um .sincro com validação (nomes fixos, tamanhos, tipos). mode: add | replace. Devolve (status, resposta)."""
+        try:
+            z = zipfile.ZipFile(path)
+        except (zipfile.BadZipFile, OSError):
+            return 400, {"error": "Arquivo .sincro inválido."}
+        with z:
+            infos = {i.filename: i for i in z.infolist()}
+            if len(infos) > 5000 or "sincro.json" not in infos or infos["sincro.json"].file_size > 5_000_000:
+                return 400, {"error": "Arquivo .sincro inválido."}
+            ok_name = re.compile(r"^song-(\d{1,3})/(score\.bin|audio-\d{1,2}\.bin)$")
+            for n, i in infos.items():
+                if n != "sincro.json" and (not ok_name.match(n) or i.file_size > MAX_UPLOAD):
+                    return 400, {"error": "O .sincro tem arquivos que não reconheço (%s)." % n[:40]}
+            try:
+                man = json.loads(z.read("sincro.json").decode("utf-8"))
+                if man.get("format") != "sincro" or man.get("version") != 1 or not isinstance(man.get("songs"), list):
+                    raise ValueError
+            except (ValueError, UnicodeDecodeError, AttributeError):
+                return 400, {"error": "Arquivo .sincro inválido ou de uma versão que não conheço."}
+            if len(man["songs"]) > 200:
+                return 400, {"error": "Músicas demais no arquivo."}
+            with self.lock:
+                if mode == "replace" and (self.state.get("playing") or any(h.is_playing() for h in self.hubs.values())):
+                    return 409, {"error": "Pare a música e o metrônomo antes de substituir a playlist."}
+                if mode != "replace" and len(self.rep["songs"]) + len(man["songs"]) > 200:
+                    return 400, {"error": "Repertório cheio (200 músicas)."}
+                if mode == "replace":
+                    for m in self.rep["songs"]:
+                        shutil.rmtree(self.rep_dir / ("song-%d" % m["id"]), ignore_errors=True)
+                    self.rep["songs"] = []
+                    self.rep["current"] = None
+                added = 0
+                for idx, e in enumerate(man["songs"], 1):
+                    if not isinstance(e, dict):
+                        continue
+                    m = {"id": self.rep["next"], "name": self._clean_name(e.get("name") or "Música", 60) or "Música"}
+                    d = self.rep_dir / ("song-%d" % m["id"])
+                    d.mkdir(parents=True)
+                    m["score"] = None
+                    sc = e.get("score")
+                    if isinstance(sc, dict) and ("song-%d/score.bin" % idx) in infos:
+                        with z.open("song-%d/score.bin" % idx) as src, open(d / "score.bin", "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                        m["score"] = {"file": "score.bin", "name": self._clean_name(sc.get("name") or "partitura", 120) or "partitura", "size": (d / "score.bin").stat().st_size}
+                    m["audio"] = []
+                    for a in (e.get("audio") or [])[:MAX_GROUPS]:
+                        if not isinstance(a, dict) or not re.match(r"^audio-\d{1,2}\.bin$", str(a.get("file", ""))) or ("song-%d/%s" % (idx, a["file"])) not in infos:
+                            continue
+                        gname = self._clean_name(a.get("group", ""), 40)
+                        if not gname:
+                            continue
+                        with z.open("song-%d/%s" % (idx, a["file"])) as src, open(d / a["file"], "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                        m["audio"].append({"group": gname, "file": a["file"], "name": self._clean_name(a.get("name") or "audio", 120) or "audio",
+                                           "mime": self._clean_name(a.get("mime") or "application/octet-stream", 60), "size": (d / a["file"]).stat().st_size})
+                    parts = e.get("parts") if isinstance(e.get("parts"), dict) else {}
+                    m["parts"] = {self._clean_name(n, 40): int(i) for n, i in parts.items() if self._clean_name(n, 40) and isinstance(i, int) and 0 <= i < 64}
+                    try:
+                        m["bpm"] = float(e["bpm"]) if e.get("bpm") else None
+                        m["beats"] = int(e["beats"]) if e.get("beats") else None
+                    except (TypeError, ValueError):
+                        m["bpm"], m["beats"] = None, None
+                    marks = {}
+                    if isinstance(e.get("marks"), dict):
+                        for sig, v in list(e["marks"].items())[:64]:
+                            try:
+                                marks[str(sig)[:300]] = {"marks": [round(float(x), 1) for x in v["marks"]][:5000], "offset": float(v.get("offset", 0))}
+                            except (TypeError, ValueError, KeyError, AttributeError):
+                                continue
+                    m["marks"] = marks
+                    cols = e.get("colors") if isinstance(e.get("colors"), dict) else {}
+                    m["colors"] = {self._clean_name(n, 40): c.lower() for n, c in cols.items() if isinstance(c, str) and COLOR_RE.match(c)}
+                    self.rep["next"] += 1
+                    self.rep["songs"].append(m)
+                    added += 1
+                self._rep_save()
+            out = self.rep_json()
+            out["added"] = added
+            return 200, out
+
     def _rep_apply(self, m):
         d = self.rep_dir / ("song-%d" % m["id"])
         # grupos: pelo NOME; os que não existem mais são recriados
@@ -636,6 +776,10 @@ class Session:
             if name not in ids and len(self.group_names) < MAX_GROUPS:
                 self.group_op({"op": "add", "name": name})
                 ids[name] = "g%d" % (self.group_next - 1)
+        for name, col in (m.get("colors") or {}).items():
+            if name in ids and isinstance(col, str) and COLOR_RE.match(col):
+                self.group_colors[ids[name]] = col.lower()
+        self.group_rev += 1
         # áudio por grupo: quem não está na música fica sem áudio
         have = {a["group"]: a for a in m.get("audio", [])}
         for gid, name in list(self.group_names.items()):
@@ -775,6 +919,32 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, s.state)
         if path == "/api/setlist":
             return self._json(200, s.rep_json())
+        if path == "/api/setlist/export":
+            ids = None
+            if q.get("ids"):
+                try:
+                    ids = {int(x) for x in q["ids"].split(",") if x}
+                except ValueError:
+                    return self._json(400, {"error": "Lista de músicas inválida."})
+            fp = s.rep_export(ids)
+            if fp is None:
+                return self._json(404, {"error": "Nada para exportar."})
+            name = re.sub(r'[^\w .-]', "", q.get("name", "") or "playlist", flags=re.U).strip()[:60] or "playlist"
+            try:
+                size = os.path.getsize(fp)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + urllib.parse.quote(name + ".sincro"))
+                self.send_header("Content-Length", str(size))
+                self.end_headers()
+                with open(fp, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile, 65536)
+            finally:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+            return
         if path == "/events":
             fila = queue.Queue()
             with s.lock:
@@ -889,6 +1059,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, '{"clientSentAt":%d,"serverReceivedAt":%.3f,"serverSentAt":%.3f}' % (client_sent, t_recv, sent))
         if path == "/api/audio/upload":
             return self._upload(q)
+        if path == "/api/setlist/import":
+            return self._import_sincro(q)
         if path == "/api/score/upload":
             return self._upload_score(q)
         body = self._body_json()
@@ -988,6 +1160,35 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "Envio interrompido."})
         h.set_file(str(target), name, self.headers.get("X-File-Type", "application/octet-stream"), n)
         return self._json(200, s.groups_json())
+
+    def _import_sincro(self, q):
+        s = SESSION
+        mode = "replace" if q.get("mode") == "replace" else "add"
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n <= 0 or n > MAX_IMPORT:
+            return self._json(400, {"error": "Arquivo vazio ou grande demais (máximo %d MB)." % (MAX_IMPORT // 1_000_000)})
+        target = s.cache_dir / ("import-%d.sincro" % int(time.time() * 1000))
+        left = n
+        try:
+            with open(target, "wb") as f:
+                while left > 0:
+                    chunk = self.rfile.read(min(65536, left))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    left -= len(chunk)
+            if left > 0:
+                return self._json(400, {"error": "Envio interrompido."})
+            status, reply = s.rep_import(str(target), mode)
+            return self._json(status, reply)
+        finally:
+            try:
+                os.remove(target)
+            except OSError:
+                pass
 
     def _upload_score(self, q):
         s = SESSION

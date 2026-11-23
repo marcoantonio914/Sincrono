@@ -56,6 +56,7 @@
         '<button type="button" data-a="down"' + (i === data.songs.length - 1 ? ' disabled' : '') + '>↓ Descer</button>' +
         '<button type="button" data-a="update" title="Guarda nesta música o que está carregado agora">Atualizar com o atual</button>' +
         '<button type="button" data-a="rename">Renomear</button>' +
+        '<button type="button" data-a="export" title="Salva só esta música num arquivo .sincro">Salvar esta música (.sincro)</button>' +
         '<button type="button" data-a="remove" class="danger">Remover</button>';
       li.appendChild(menu);
       li.addEventListener('click', (ev) => {
@@ -67,6 +68,7 @@
         else if (act === 'up') call({ op: 'move', id: m.id, dir: -1 });
         else if (act === 'down') call({ op: 'move', id: m.id, dir: 1 });
         else if (act === 'update') { if (confirm('Substituir o que está guardado em "' + m.name + '" pelo que está carregado agora?')) call({ op: 'update', id: m.id }, 'Música atualizada.'); }
+        else if (act === 'export') download('/api/setlist/export?ids=' + m.id + '&name=' + encodeURIComponent(m.name));
         else if (act === 'rename') { const n = prompt('Novo nome:', m.name); if (n && n.trim()) call({ op: 'rename', id: m.id, name: n.trim() }); }
         else if (act === 'remove') { if (confirm('Remover "' + m.name + '" da playlist?')) call({ op: 'remove', id: m.id }); }
       });
@@ -78,6 +80,24 @@
   $('rep-add').addEventListener('click', async () => {
     const n = $('rep-name');
     if (await call({ op: 'add', name: n.value }, 'Música salva no repertório.')) n.value = '';
+  });
+  function download(url) { const a = document.createElement('a'); a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove(); }
+  $('rep-export').addEventListener('click', () => {
+    if (!data.songs.length) { msg('A playlist está vazia: adicione músicas antes de salvar.'); return; }
+    download('/api/setlist/export?name=playlist'); msg('Salvando a playlist num arquivo .sincro…');
+  });
+  $('rep-import').addEventListener('change', async () => {
+    const inp = $('rep-import'); const f = inp.files && inp.files[0]; if (!f) return;
+    const mode = $('rep-import-mode').value;
+    if (mode === 'replace' && data.songs.length && !confirm('Substituir toda a playlist atual pelo conteúdo de "' + f.name + '"?')) { inp.value = ''; return; }
+    msg('Abrindo ' + f.name + '…');
+    try {
+      const r = await fetch('/api/setlist/import?mode=' + mode, { method: 'POST', body: f });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) msg(j.error || 'Não foi possível abrir o arquivo.');
+      else { data = j; render(); msg((j.added || 0) + (j.added === 1 ? ' música adicionada' : ' músicas adicionadas') + ' da playlist "' + f.name + '".'); }
+    } catch { msg('Sem conexão com o servidor.'); }
+    inp.value = '';
   });
   $('rep-new').addEventListener('click', () => {
     if (confirm('Começar uma nova música? A configuração ao vivo (partitura, áudios, partes) será limpa. A música atual continua na playlist.')) call({ op: 'new' }, 'Pronto: configure a nova música na aba MÚSICA e toque em "+ Adicionar a música atual".');

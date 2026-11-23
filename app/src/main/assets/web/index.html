@@ -150,6 +150,11 @@
           <button id="rep-new" type="button" title="Limpa a configuração ao vivo para montar outra música; a música atual continua na playlist">Nova música</button>
           <button id="rep-add" type="button" title="Guarda aqui a partitura, os áudios, as partes, o andamento e os marcadores que estão carregados agora">+ Adicionar a música atual</button>
         </div>
+        <div class="pl-add pl-file">
+          <button id="rep-export" type="button" title="Salva a playlist inteira (partituras, áudios, partes, marcadores e cores) num arquivo .sincro">Salvar playlist (.sincro)</button>
+          <label class="pl-import">Abrir .sincro <input id="rep-import" type="file" accept=".sincro,application/octet-stream" hidden></label>
+          <select id="rep-import-mode" aria-label="Ao abrir um arquivo .sincro"><option value="add">Juntar às músicas atuais</option><option value="replace">Substituir a playlist</option></select>
+        </div>
         <p id="rep-msg" class="hint" aria-live="polite"></p>
         <p class="hint">Cada música guarda a partitura, o áudio de cada grupo, a parte de cada grupo, o andamento e os marcadores. Só troca de música com tudo parado.</p>
       </section>

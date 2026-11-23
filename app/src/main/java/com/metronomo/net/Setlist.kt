@@ -4,7 +4,14 @@ import com.metronomo.audio.AudioHub
 import com.metronomo.diag.Groups
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 /**
  * Repertório do anfitrião: músicas preparadas (partitura, áudio por grupo, parte de cada grupo, andamento, marcadores).
@@ -90,13 +97,22 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
         val marks = JSONObject()
         sc?.marks?.forEach { (sig, v) -> marks.put(sig, JSONObject().put("marks", JSONArray(v.first)).put("offset", v.second)) }
         m.put("marks", marks)
+        m.put("colors", liveColorsJson())
     }
+
+    private fun liveColorsJson(): JSONObject {
+        val c = JSONObject()
+        for (gid in server.groups.ids()) c.put(server.groups.name(gid), server.groups.color(gid) ?: Groups.defaultColor(gid))
+        return c
+    }
+
+    private fun colorsText(c: JSONObject) = c.keys().asSequence().map { "$it=${c.getString(it)}" }.sorted().joinToString(";")
 
     private fun hasConfig(): Boolean =
         server.scoreSnapshot() != null || server.groups.ids().any { server.hub(it)?.hasFile() == true }
 
-    private fun fp(score: String, audio: List<String>, parts: List<String>, marks: String, bpm: Double, beats: Int) =
-        listOf(score, audio.sorted().joinToString(";"), parts.sorted().joinToString(";"), marks, bpm.toString(), beats.toString()).joinToString("#")
+    private fun fp(score: String, audio: List<String>, parts: List<String>, marks: String, bpm: Double, beats: Int, colors: String) =
+        listOf(score, audio.sorted().joinToString(";"), parts.sorted().joinToString(";"), marks, bpm.toString(), beats.toString(), colors).joinToString("#")
 
     /** "Impressão digital" da configuração viva da sessão (para saber se mudou desde que a música foi guardada). */
     private fun fpLive(): String {
@@ -105,7 +121,7 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
         val parts = sc?.parts?.filter { server.groups.exists(it.key) }?.map { "${server.groups.name(it.key)}=${it.value}" } ?: emptyList()
         val marks = sc?.marks?.entries?.sortedBy { it.key }?.joinToString(";") { "${it.key}:${it.value.second}:${it.value.first.joinToString(",")}" } ?: ""
         val st = server.metronomeState()
-        return fp(sc?.let { "${it.name}|${it.bytes.size}" } ?: "-", audio, parts, marks, st.bpm, st.beatsPerBar)
+        return fp(sc?.let { "${it.name}|${it.bytes.size}" } ?: "-", audio, parts, marks, st.bpm, st.beatsPerBar, colorsText(liveColorsJson()))
     }
 
     private fun fpSong(m: JSONObject): String {
@@ -119,7 +135,9 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
             val o = mk.getJSONObject(k); val arr = o.getJSONArray("marks")
             "$k:${o.optDouble("offset", 0.0)}:${List(arr.length()) { arr.getDouble(it) }.joinToString(",")}"
         }
-        return fp(sc?.let { "${it.getString("name")}|${it.optInt("size")}" } ?: "-", audio, parts, marks, m.optDouble("bpm", 0.0), m.optInt("beats", 4))
+        // músicas antigas não têm cores guardadas: valem as de agora (não ficam "alteradas" à toa)
+        val colors = m.optJSONObject("colors")?.let { colorsText(it) } ?: colorsText(liveColorsJson())
+        return fp(sc?.let { "${it.getString("name")}|${it.optInt("size")}" } ?: "-", audio, parts, marks, m.optDouble("bpm", 0.0), m.optInt("beats", 4), colors)
     }
 
     /** A música carregada guarda sozinha o que mudou na configuração (nada tocando; ignora sessão vazia). Devolve true se gravou. */
@@ -158,6 +176,9 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
         for (name in need) if (name !in ids) {
             val id = server.groups.add(name)
             if (id != null) { ids[name] = id; groupsChanged = true }
+        }
+        m.optJSONObject("colors")?.let { c ->
+            c.keys().forEach { name -> ids[name]?.let { gid -> if (server.groups.setColor(gid, c.optString(name))) groupsChanged = true } }
         }
         if (groupsChanged) onGroups()
         val have = HashMap<String, JSONObject>()
@@ -269,6 +290,185 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
                 Pair(200, json())
             }
             else -> err(400, "Operação inválida.")
+        }
+    }
+
+    // ---- arquivo .sincro: zip com sincro.json + song-N/score.bin + song-N/audio-K.bin (igual ao servidor do PC)
+
+    private fun addFile(z: ZipOutputStream, name: String, f: File) {
+        z.putNextEntry(ZipEntry(name))
+        f.inputStream().use { it.copyTo(z) }
+        z.closeEntry()
+    }
+
+    /** Grava as músicas [ids] (ou todas, se null) num .sincro. Devolve quantas foram gravadas. Não fecha [out]. */
+    fun exportTo(out: OutputStream, ids: Set<Int>?): Int = synchronized(lock) {
+        val list = songs.filter { ids == null || it.getInt("id") in ids }
+        if (list.isEmpty()) return 0
+        val z = ZipOutputStream(out.buffered())
+        z.setLevel(0)   // áudio já é comprimido: só empacota
+        val outSongs = JSONArray()
+        list.forEachIndexed { n, m ->
+            val i = n + 1
+            val d = songDir(m.getInt("id"))
+            val e = JSONObject().put("name", m.getString("name")).put("score", JSONObject.NULL)
+            if (m.has("bpm")) e.put("bpm", m.getDouble("bpm"))
+            if (m.has("beats")) e.put("beats", m.getInt("beats"))
+            e.put("marks", m.optJSONObject("marks") ?: JSONObject())
+            e.put("parts", m.optJSONObject("parts") ?: JSONObject())
+            e.put("colors", m.optJSONObject("colors") ?: JSONObject())
+            val sc = m.optJSONObject("score")
+            if (sc != null && File(d, sc.getString("file")).exists()) {
+                addFile(z, "song-$i/score.bin", File(d, sc.getString("file")))
+                e.put("score", JSONObject().put("name", sc.getString("name")).put("size", sc.optLong("size", 0)))
+            }
+            val audios = JSONArray()
+            val a = m.optJSONArray("audio") ?: JSONArray()
+            for (k in 0 until a.length()) {
+                val x = a.getJSONObject(k)
+                val f = File(d, x.getString("file"))
+                if (!f.exists()) continue
+                val fn = "audio-${audios.length() + 1}.bin"
+                addFile(z, "song-$i/$fn", f)
+                audios.put(JSONObject().put("group", x.getString("group")).put("file", fn).put("name", x.getString("name")).put("mime", x.optString("mime", "application/octet-stream")).put("size", x.optLong("size", 0)))
+            }
+            e.put("audio", audios)
+            outSongs.put(e)
+        }
+        z.putNextEntry(ZipEntry("sincro.json"))
+        z.write(JSONObject().put("format", "sincro").put("version", 1).put("songs", outSongs).toString().toByteArray(Charsets.UTF_8))
+        z.closeEntry()
+        z.finish()
+        z.flush()
+        list.size
+    }
+
+    private fun cleanFile(s: String, max: Int) = clean(s, max).replace("/", "").replace("\\", "")
+
+    /** Copia até [max] bytes; devolve quantos copiou, ou null se passou do limite. */
+    private fun copyLimited(input: InputStream, out: OutputStream, max: Long): Long? {
+        val buf = ByteArray(65536)
+        var total = 0L
+        out.use {
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > max) return null
+                it.write(buf, 0, n)
+            }
+        }
+        return total
+    }
+
+    /** Abre um .sincro. Só aceita os nomes de arquivo esperados e limita os tamanhos. Devolve (status, lista + "added"). */
+    fun importFrom(input: InputStream, replace: Boolean): Pair<Int, JSONObject> = synchronized(lock) {
+        val tmp = File(dir, "import-tmp")
+        tmp.deleteRecursively()
+        tmp.mkdirs()
+        try {
+            val okName = Regex("^song-(\\d{1,3})/(score\\.bin|audio-\\d{1,2}\\.bin)$")
+            val bad = "Arquivo .sincro inválido."
+            var manifest: String? = null
+            var total = 0L
+            var count = 0
+            val z = ZipInputStream(input.buffered())
+            while (true) {
+                val e = try { z.nextEntry } catch (_: Exception) { return err(400, bad) } ?: break
+                if (++count > 5000) return err(400, bad)
+                if (e.isDirectory) continue
+                if (e.name == "sincro.json") {
+                    val bos = ByteArrayOutputStream()
+                    copyLimited(z, bos, 5_000_000L) ?: return err(400, bad)
+                    manifest = bos.toString("UTF-8")
+                } else {
+                    if (!okName.matches(e.name)) return err(400, "O .sincro tem arquivos que não reconheço.")
+                    val n = copyLimited(z, FileOutputStream(File(tmp, e.name.replace('/', '_'))), 300_000_000L) ?: return err(400, bad)
+                    total += n
+                    if (total > 2_000_000_000L) return err(400, bad)
+                }
+            }
+            val man = try { JSONObject(manifest ?: return err(400, bad)) } catch (_: Exception) { return err(400, bad) }
+            if (man.optString("format") != "sincro" || man.optInt("version", 0) != 1) return err(400, "Arquivo .sincro inválido ou de uma versão que não conheço.")
+            val arr = man.optJSONArray("songs") ?: return err(400, bad)
+            if (arr.length() > 200) return err(400, "Músicas demais no arquivo.")
+            if (replace && !nothingPlaying()) return err(409, "Pare a música e o metrônomo antes de substituir a playlist.")
+            if (!replace && songs.size + arr.length() > 200) return err(400, "Repertório cheio (200 músicas).")
+            if (replace) {
+                songs.forEach { songDir(it.getInt("id")).deleteRecursively() }
+                songs.clear()
+                current = -1
+            }
+            val hex = Regex("^#[0-9a-fA-F]{6}$")
+            var added = 0
+            for (idx in 1..arr.length()) {
+                val e = arr.optJSONObject(idx - 1) ?: continue
+                val id = next
+                val m = JSONObject().put("id", id).put("name", cleanFile(e.optString("name", "Música"), 60).ifEmpty { "Música" })
+                val d = songDir(id)
+                d.deleteRecursively()
+                d.mkdirs()
+                val sc = e.optJSONObject("score")
+                val scSrc = File(tmp, "song-${idx}_score.bin")
+                if (sc != null && scSrc.exists()) {
+                    scSrc.copyTo(File(d, "score.bin"), overwrite = true)
+                    m.put("score", JSONObject().put("file", "score.bin").put("name", cleanFile(sc.optString("name", "partitura"), 120).ifEmpty { "partitura" }).put("size", scSrc.length()))
+                }
+                val audio = JSONArray()
+                val ea = e.optJSONArray("audio") ?: JSONArray()
+                for (k in 0 until minOf(ea.length(), 16)) {
+                    val a = ea.optJSONObject(k) ?: continue
+                    val fn = a.optString("file")
+                    if (!Regex("^audio-\\d{1,2}\\.bin$").matches(fn)) continue
+                    val src = File(tmp, "song-$idx" + "_" + fn)
+                    val g = cleanFile(a.optString("group"), 40)
+                    if (!src.exists() || g.isEmpty()) continue
+                    src.copyTo(File(d, fn), overwrite = true)
+                    audio.put(JSONObject().put("group", g).put("file", fn).put("name", cleanFile(a.optString("name", "audio"), 120).ifEmpty { "audio" })
+                        .put("mime", cleanFile(a.optString("mime", "application/octet-stream"), 60)).put("size", src.length()))
+                }
+                m.put("audio", audio)
+                val parts = JSONObject()
+                e.optJSONObject("parts")?.let { p ->
+                    p.keys().forEach { k ->
+                        val v = p.opt(k)
+                        val name = cleanFile(k, 40)
+                        if (name.isNotEmpty() && v is Int && v in 0..63) parts.put(name, v)
+                    }
+                }
+                m.put("parts", parts)
+                if (e.has("bpm") && !e.isNull("bpm")) e.optDouble("bpm", Double.NaN).takeIf { !it.isNaN() && it > 0 }?.let { m.put("bpm", it) }
+                if (e.has("beats") && !e.isNull("beats")) e.optInt("beats", 0).takeIf { it in 1..32 }?.let { m.put("beats", it) }
+                val marks = JSONObject()
+                e.optJSONObject("marks")?.let { mk ->
+                    var c = 0
+                    mk.keys().forEach { sig ->
+                        val o = mk.optJSONObject(sig) ?: return@forEach
+                        val ma = o.optJSONArray("marks") ?: return@forEach
+                        if (c++ >= 64) return@forEach
+                        val clean = JSONArray()
+                        for (q in 0 until minOf(ma.length(), 5000)) clean.put(ma.optDouble(q, 0.0))
+                        marks.put(sig.take(300), JSONObject().put("marks", clean).put("offset", o.optDouble("offset", 0.0)))
+                    }
+                }
+                m.put("marks", marks)
+                val colors = JSONObject()
+                e.optJSONObject("colors")?.let { c ->
+                    c.keys().forEach { k ->
+                        val v = c.optString(k)
+                        val name = cleanFile(k, 40)
+                        if (name.isNotEmpty() && hex.matches(v)) colors.put(name, v.lowercase())
+                    }
+                }
+                m.put("colors", colors)
+                next++
+                songs.add(m)
+                added++
+            }
+            save()
+            Pair(200, json().put("added", added))
+        } finally {
+            tmp.deleteRecursively()
         }
     }
 }

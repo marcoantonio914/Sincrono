@@ -601,7 +601,7 @@ private fun GroupRow(g: GroupInfo, level: Float, score: ScoreInfo, onPick: () ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatusDot(if (g.playing) Pal.Ok else Pal.Recessed, 8.dp)
-                    Text(g.name, fontWeight = FontWeight.Bold, color = groupColor(g.id))
+                    Text(g.name, fontWeight = FontWeight.Bold, color = groupColor(g))
                 }
                 Text(g.file ?: "sem arquivo", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
             }
@@ -615,6 +615,18 @@ private fun GroupRow(g: GroupInfo, level: Float, score: ScoreInfo, onPick: () ->
                 },
                 modifier = Modifier.weight(1f),
             ) { Text(if (editing) "Cancelar" else "Renomear") }
+        }
+        // Cor do grupo: o anfitrião escolhe (a mesma cor aparece em todos os aparelhos)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Cor", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 4.dp))
+            val chosen = groupHex(g).lowercase()
+            for (hex in GROUP_PALETTE) {
+                Box(
+                    Modifier.size(28.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex)))
+                        .border(if (hex == chosen) 3.dp else 1.dp, if (hex == chosen) Pal.Ink else Pal.Hairline, CircleShape)
+                        .clickable { SessionController.setGroupColor(g.id, hex) },
+                )
+            }
         }
         // Parte da partitura que este grupo vê (só aparece depois de importar a partitura na aba MÚSICA).
         if (score.partNames.isNotEmpty()) {
@@ -660,12 +672,12 @@ private fun PeerGroupPicker(name: String, current: String, groups: List<GroupInf
             androidx.compose.material3.FilledTonalButton(
                 onClick = { open = true },
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = groupColor(current), contentColor = androidx.compose.ui.graphics.Color.White),
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = groups.firstOrNull { it.id == current }?.let { groupColor(it) } ?: groupColor(current), contentColor = androidx.compose.ui.graphics.Color.White),
             ) { Text(groups.firstOrNull { it.id == current }?.name ?: "Geral") }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 groups.forEach { g ->
                     DropdownMenuItem(
-                        text = { Text(g.name, color = groupColor(g.id), fontWeight = FontWeight.Bold) },
+                        text = { Text(g.name, color = groupColor(g), fontWeight = FontWeight.Bold) },
                         onClick = {
                             open = false
                             onPick(g.id)

@@ -79,6 +79,7 @@
     const box = $('groups-list');
     if (!box || busy.size) return;
     box.textContent = '';
+    window.sincronoSetGroupColors(groupsInfo.groups);
     for (const g of groupsInfo.groups) {
       const d = document.createElement('div'); d.className = 'group'; d.style.borderLeft = '6px solid ' + window.sincronoGroupColor(g.id); d.style.paddingLeft = '10px';
       const head = row();
@@ -86,6 +87,19 @@
       const title = document.createElement('strong'); title.className = 'grow'; title.textContent = g.name; title.style.color = window.sincronoGroupColor(g.id);
       const file = document.createElement('span'); file.className = 'muted'; file.textContent = g.file || 'sem arquivo';
       head.append(dot, title, file); d.appendChild(head);
+      // cor do grupo: o anfitrião escolhe (a mesma cor aparece em todos os aparelhos)
+      const rc = row('colors'); const lc = document.createElement('span'); lc.className = 'muted'; lc.textContent = 'Cor';
+      rc.appendChild(lc);
+      const cur = window.sincronoGroupColor(g.id);
+      window.sincronoGroupPalette.forEach((c) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch' + (c.toLowerCase() === cur.toLowerCase() ? ' on' : '');
+        b.style.background = c; b.setAttribute('aria-label', 'Cor ' + c + ' para ' + g.name); b.title = c;
+        b.addEventListener('click', () => api('/api/groups', { op: 'color', id: g.id, color: c }).then(refresh));
+        rc.appendChild(b);
+      });
+      const pick = document.createElement('input'); pick.type = 'color'; pick.value = cur; pick.className = 'swatch-pick'; pick.setAttribute('aria-label', 'Outra cor para ' + g.name); pick.title = 'Outra cor';
+      pick.addEventListener('change', () => api('/api/groups', { op: 'color', id: g.id, color: pick.value }).then(refresh));
+      rc.appendChild(pick); d.appendChild(rc);
       const r1 = row();
       if (caps.upload) {
         const up = document.createElement('input'); up.type = 'file'; up.accept = 'audio/*'; up.className = 'grow';
