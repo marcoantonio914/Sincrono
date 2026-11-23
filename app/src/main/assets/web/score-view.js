@@ -792,6 +792,12 @@
         const x = p.x * z, vw = b.clientWidth;
         if (x > b.scrollLeft + vw * 0.72 || x < b.scrollLeft + 10) b.scrollLeft = Math.max(0, x - vw * 0.28);
         b.scrollTop = 0;
+      } else if (this.mode === 'page' && this.systems && this.systems.length) {
+        // página: mostra um bloco de linhas inteiras e vira a página quando o cursor passa para a seguinte (sem rolar aos poucos)
+        const h = (this.systems[0].bottom - this.systems[0].top) * z;
+        const per = Math.max(1, Math.floor(b.clientHeight / h));
+        const target = Math.floor(p.sys / per) * per * h;
+        if (Math.abs(b.scrollTop - target) > 2) b.scrollTop = Math.round(target);
       } else {
         const y = p.top * z, vh = b.clientHeight;
         if (y < b.scrollTop || (p.bottom * z) > b.scrollTop + vh) b.scrollTop = Math.max(0, y - 8);

@@ -196,6 +196,13 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Causa: o controle marcava "estou arrastando" ao tocar e só soltava no evento `change`. Se o toque era cancelado (rolagem da página no celular), ficava preso e parava de acompanhar a música. Agora solta em `pointerup/pointercancel/lostpointercapture/blur` e há um vigia de 3 s.
 - Teste novo: `tools/teste_linha_tempo_real.py`. Reproduzido e corrigido na página web; no app Android (WebView) NÃO foi testado. Se o problema persistir lá, o próximo suspeito é o `sincronoTick` do app não atualizar o estado do metrônomo/áudio no host.
 
+## 9l. v26 — modo "Página" (vira sozinha), palco em página por padrão, diagrama de conexão (Kotlin sem mudança)
+
+- Novo modo de visualização **Página**: mostra um bloco de linhas inteiras e vira a página inteira quando o cursor passa para a seguinte (sem rolar aos poucos). O botão redondo agora cicla **Uma linha → Página → Linhas rolando → Quebras da partitura**. O palco usa "Página" por padrão (quem já escolheu outro modo mantém). Implementado em `ScoreView.follow` (modo `page`) e `score-panel.js`.
+- Teste: `tools/teste_palco_quebras.py` (rolagem sempre em múltiplos de página e avançando). NÃO testado no app Android (a WebView usa o mesmo `score-panel.js`).
+- Diagrama da conexão: `docs/conexao.svg` (e `.png`): roteador, computador anfitrião ou celular anfitrião, celulares por grupo; o que trafega (relógio, comandos, arquivos uma vez).
+- Atenção: textos antigos acima (seções 3/9 e README) dizem "cada músico pode trocar a sua parte"; desde a v22 só o anfitrião escolhe a parte.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -224,3 +231,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v23: partitura só com cifra e letra (pauta oculta), patch do usuário.
 - v24: correção do palco (Marcar compassos cobria os botões).
 - v25: linha do tempo acompanha a música em tempo real (controle não fica mais preso).
+- v26: modo Página (vira sozinha) e diagrama de conexão.

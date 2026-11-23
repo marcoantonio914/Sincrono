@@ -10,9 +10,9 @@
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
   let view = null, drawnGroup = '', stage = /[?&]stage=1/.test(location.search), seeking = false, seekAt = 0;
   // visualizações: 'continuous' (uma linha rolando), 'pages' (quebra sozinha para caber na tela) e 'score' (respeita as quebras de linha da partitura)
-  const MODES = ['continuous', 'pages', 'score'];
-  const MODE_NAME = { continuous: 'Uma linha rolando', pages: 'Linhas que cabem na tela', score: 'Quebras da partitura' };
-  let mode = 'continuous', zoom = 1, stageMode = 'score', stageZoom = 1.4;
+  const MODES = ['continuous', 'page', 'pages', 'score'];
+  const MODE_NAME = { continuous: 'Uma linha rolando', page: 'Página (vira sozinha)', pages: 'Linhas rolando', score: 'Quebras da partitura' };
+  let mode = 'continuous', zoom = 1, stageMode = 'page', stageZoom = 1.4;
   try {
     const m = localStorage.getItem('sincrono.scoreMode'); if (MODES.includes(m)) mode = m;
     const sm = localStorage.getItem('sincrono.stageMode'); if (MODES.includes(sm)) stageMode = sm;
@@ -24,6 +24,7 @@
   const svgIcon = (d) => '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
   const ICON = {
     continuous: 'M3 12h18M16 7l5 5-5 5M8 7l-5 5 5 5',
+    page: 'M6 3h12v18H6zM9 8h6M9 12h6M9 16h6',
     pages: 'M4 5h16M4 10h16M4 15h16M4 20h10',
     score: 'M3 7h18M3 12h18M3 17h18M9 5v14M15 5v14',
     stage: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',

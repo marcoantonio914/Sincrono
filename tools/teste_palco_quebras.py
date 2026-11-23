@@ -37,11 +37,11 @@ try:
         check("botões redondos (modo, A−, A+, palco)", all(pg.eval_on_selector(i, "e => getComputedStyle(e).borderRadius") in ("50%", "22px") or float(pg.eval_on_selector(i, "e => parseFloat(getComputedStyle(e).borderTopLeftRadius)")) >= 20 for i in ("#score-mode", "#score-zoom-in", "#score-zoom-out", "#score-stage")))
         check("anfitrião vê o seletor de parte", pg.is_visible("#score-part"))
         modos = []
-        for _ in range(3):
+        for _ in range(4):
             modos.append(pg.evaluate("window.__scoreView.mode")); pg.click("#score-mode"); pg.wait_for_timeout(300)
-        check("botão cicla continuous→pages→score", modos == ["continuous", "pages", "score"], modos)
+        check("botão cicla linha→página→linhas→partitura", modos == ["continuous", "page", "pages", "score"], modos)
         # modo 'score': sistemas = marcas new-system (25 no K284), sem rolagem horizontal
-        pg.evaluate("window.__scoreView.mode='score'"); pg.click("#score-mode"); pg.click("#score-mode")  # volta para continuous->pages->score
+        pg.click("#score-mode"); pg.click("#score-mode"); pg.click("#score-mode")  # continuous -> page -> pages -> score
         pg.wait_for_timeout(400)
         check("modo 'score' ativo", pg.evaluate("window.__scoreView.mode") == "score", pg.evaluate("window.__scoreView.mode"))
         sw = pg.evaluate("[document.querySelector('#score-view').scrollWidth, document.querySelector('#score-view').clientWidth]")
@@ -58,6 +58,17 @@ try:
         check("palco: sem rolagem horizontal", sw[0] <= sw[1] + 2, sw)
         n_sys = pg.evaluate("document.querySelectorAll('#score-view svg g.system, #score-view svg [data-system]').length")
         pg.screenshot(path="/tmp/palco390.png")
+        # modo página no palco: vira a página inteira quando o cursor passa para a seguinte
+        pg.evaluate("window.__scoreView.mode='page'"); pg.wait_for_timeout(200)
+        pos = []
+        for k in (0, 10, 25, 40, 70):
+            pg.evaluate("(k)=>{const v=window.__scoreView; v.pausedUntil=0; v.setCursor({k:k,q:0},true)}", k)
+            pg.wait_for_timeout(120)
+            pos.append(pg.evaluate("[document.querySelector('#score-view').scrollTop, window.__scoreView.systems[0].bottom - window.__scoreView.systems[0].top, window.__scoreView.zEff||window.__scoreView.zoom, document.querySelector('#score-view').clientHeight]"))
+        tops = [x[0] for x in pos]
+        h = pos[0][1] * pos[0][2]; per = max(1, int(pos[0][3] // h))
+        check("página: rolagem sempre em múltiplos de página", all(abs(t % (per * h)) < 2 or abs((t % (per * h)) - per * h) < 2 for t in tops), pos)
+        check("página: avança ao longo da música", tops[-1] > tops[0] and tops == sorted(tops), tops)
         pg.click("#score-stage"); pg.wait_for_timeout(300)
         pg.evaluate("document.getElementById('score-marks').hidden=true; document.getElementById('marks-bar').hidden=true")
         check("sair do palco", not pg.evaluate("document.querySelector('#score').classList.contains('stage')"))
