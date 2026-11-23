@@ -366,13 +366,14 @@
         }
       }
       // barras de compasso
-      const yb = yBottom, y0 = yTop;
-      const vline = (x, sw) => '<line x1="' + f1(x) + '" x2="' + f1(x) + '" y1="' + f1(y0) + '" y2="' + f1(yb) + '" stroke="currentColor" stroke-width="' + sw + '"/>';
+      // sem pauta: a barra é um traço fino que cobre só a faixa de cifras e letra
+      const yb = this.noStaff ? yTop + 14 * (this.maxVerse || 1) - 10 : yBottom, y0 = this.noStaff ? yTop - 46 : yTop;
+      const vline = (x, sw) => '<line x1="' + f1(x) + '" x2="' + f1(x) + '" y1="' + f1(y0) + '" y2="' + f1(yb) + '" stroke="currentColor" stroke-width="' + sw + '"' + (this.noStaff ? ' opacity="0.45"' : '') + '/>';
       const dots = (x) => { let s = ''; for (let st = 1; st <= nst; st++) { const yt = staffTop(st); s += '<circle cx="' + f1(x) + '" cy="' + f1(yt + 1.5 * SP) + '" r="2" fill="currentColor"/><circle cx="' + f1(x) + '" cy="' + f1(yt + 2.5 * SP) + '" r="2" fill="currentColor"/>'; } return s; };
       if (cm.repeatStart) out.push(vline(mx + 2, 4) + vline(mx + 7, 1) + dots(mx + 12));
       const rb = m.bar && m.bar.right;
       if (cm.repeatEnd) out.push(dots(xr - 13) + vline(xr - 7, 1) + vline(xr - 2, 4));
-      else if (this.noStaff || rb === 'none') { /* sem barra de compasso */ }
+      else if (rb === 'none' && !this.noStaff) { /* sem barra de compasso */ }
       else if (i === this.score.measures.length - 1 || rb === 'light-heavy') out.push(vline(xr - 6, 1) + vline(xr - 2, 4));
       else if (rb === 'light-light') out.push(vline(xr - 5, 1) + vline(xr, 1));
       else out.push(vline(xr, 1));

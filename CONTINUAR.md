@@ -260,3 +260,6 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 **Testes (tools/):** `teste_sincro.py`, `teste_sincro_pagina.py`, `teste_cor_grupo.py` — passam, junto com todos os anteriores.
 
 **Honestidade:** o Kotlin da v29 (e o da v28) NÃO foi compilado por mim; só Python/web foram testados. Se `python3 build_apk.py` reclamar, mande o erro. O servidor HTTP do app não oferece export/import por navegador (só os botões do app). Não existe ainda abrir `.sincro` direto do gerenciador de arquivos (intent-filter) nem ajuste manual de atraso para fone Bluetooth.
+
+### 9p. v30 — patch "pauta oculta" (barras finas na vista só de cifra e letra)
+Aplicado o patch `sincrono-pauta-oculta.patch` por cima da v29. A maior parte já estava na v23; entrou o que faltava em `score-view.js`: sem pauta, as barras de compasso viram um traço fino (opacidade 0,45) só na faixa de cifras e letra, e `bar-style none` só some com a barra quando há pauta. Também: exemplo novo `docs/exemplos-partitura/cifra-e-letra-compassos.musicxml` e `tools/teste_partitura_sem_pauta.py` atualizado (12 compassos de 2 tempos a 90 bpm = 16000 ms; aos 5 s o cursor está no compasso 4). Todos os testes Python/web passam. Kotlin igual à v29 (não compilado por mim).

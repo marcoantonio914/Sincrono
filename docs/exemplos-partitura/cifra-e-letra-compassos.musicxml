@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <work><work-title>T</work-title></work>
+  <identification>
+    <encoding><software>Cifra para MusicXML</software><encoding-date>2026-11-23</encoding-date></encoding>
+  </identification>
+  <part-list><score-part id="P1"><part-name>Voz</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>2520</divisions>
+        <key print-object="no"><fifths>0</fifths><mode>major</mode></key>
+        <time print-object="no"><beats>2</beats><beat-type>4</beat-type></time>
+        <clef print-object="no"><sign>G</sign><line>2</line></clef>
+        <staff-details print-object="no"><staff-lines>0</staff-lines></staff-details>
+      </attributes>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>90</per-minute></metronome></direction-type><sound tempo="90"/></direction>
+      <direction placement="above"><direction-type><rehearsal>Intro</rehearsal></direction-type></direction>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>5040</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="2">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <forward><duration>5040</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="3">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>5040</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="4">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <forward><duration>5040</duration></forward>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="5">
+      <print new-system="yes"/>
+      <direction placement="above"><direction-type><rehearsal>Estrofe</rehearsal></direction-type></direction>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>Ci</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>middle</syllabic><text>ran</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>da,</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="6">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>ci</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>middle</syllabic><text>ran</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>middle</syllabic><text>di</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>nha,</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="7">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>va</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>mos</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>to</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1260</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>dos</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="8">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>ci</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>middle</syllabic><text>ran</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>dar</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="9">
+      <print new-system="yes"/>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>Va</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>mos</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>dar</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="10">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>a</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>mei</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>a</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>vol</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>ta,</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="11">
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>vol</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>ta</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>e</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>mei</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1008</duration><voice>1</voice><type>16th</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>a</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+    <measure number="12">
+      <harmony>
+        <root><root-step>G</root-step></root>
+        <kind text="7">dominant</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>begin</syllabic><text>va</text></lyric></note>
+      <harmony>
+        <root><root-step>C</root-step></root>
+        <kind>major</kind>
+      </harmony>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>end</syllabic><text>mos</text></lyric></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>1680</duration><voice>1</voice><type>eighth</type><stem>none</stem><notehead>none</notehead><lyric number="1"><syllabic>single</syllabic><text>dar</text></lyric></note>
+      <barline location="right"><bar-style>none</bar-style></barline>
+    </measure>
+  </part>
+</score-partwise>
