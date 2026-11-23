@@ -81,6 +81,7 @@ fun MetronomoApp() {
             .background(Pal.Canvas)
             .safeDrawingPadding(),
     ) {
+        SincroOpenDialog(ui)
         Box(
             Modifier
                 .weight(1f)

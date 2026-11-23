@@ -80,12 +80,8 @@ fun SetlistCard() {
     fun doImport(uri: android.net.Uri, replace: Boolean) {
         scope.launch {
             message = "Abrindo o arquivo…"
-            val r = withContext(Dispatchers.IO) {
-                runCatching { ctx.contentResolver.openInputStream(uri)?.use { SessionController.setlistImport(it, replace) } }.getOrNull()
-            }
-            if (r == null) message = "Não foi possível ler o arquivo."
-            else if (r.first == 200) { message = "Arquivo aberto: ${r.second.optInt("added")} música(s)."; data = r.second }
-            else message = r.second.optString("error", "Arquivo inválido.")
+            message = withContext(Dispatchers.IO) { SessionController.importSincro(ctx, uri, replace) }
+            refresh()
         }
     }
     pendingImport?.let { uri ->

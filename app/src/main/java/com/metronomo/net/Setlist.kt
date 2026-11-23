@@ -301,6 +301,9 @@ class Setlist(private val server: SessionServer, private val dir: File, private 
         z.closeEntry()
     }
 
+    /** Quantas músicas [ids] (ou todas, se null) iriam no arquivo. */
+    fun exportCount(ids: Set<Int>?): Int = synchronized(lock) { songs.count { ids == null || it.getInt("id") in ids } }
+
     /** Grava as músicas [ids] (ou todas, se null) num .sincro. Devolve quantas foram gravadas. Não fecha [out]. */
     fun exportTo(out: OutputStream, ids: Set<Int>?): Int = synchronized(lock) {
         val list = songs.filter { ids == null || it.getInt("id") in ids }

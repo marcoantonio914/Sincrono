@@ -46,6 +46,9 @@ class SessionServer(
         val headers: Map<String, String>,
         val body: String,
         val receivedAtMs: Double,
+        /** Só no envio de um .sincro (corpo grande, lido em fluxo pelo tratador, sem passar por String). */
+        val stream: InputStream? = null,
+        val streamLength: Long = 0,
     )
 
     private class SseClient(val socket: Socket, private val out: OutputStream, val group: String = "") {
@@ -244,6 +247,56 @@ class SessionServer(
         respond(out, r.first, r.second.toString(), close)
     }
 
+    /** Baixa um .sincro (playlist toda, ou ?ids=1,2). O arquivo é montado direto na conexão, sem copiar para disco. */
+    private fun handleSetlistExport(req: Request, out: OutputStream) {
+        val sl = setlist ?: return respond(out, 404, "{\"error\":\"Repertorio indisponivel.\"}", true)
+        val q = CalibrationHub.parseQuery(req.path)
+        var ids: Set<Int>? = null
+        val raw = q["ids"].orEmpty()
+        if (raw.isNotEmpty()) {
+            ids = runCatching { raw.split(',').filter { it.isNotBlank() }.map { it.trim().toInt() }.toSet() }.getOrNull()
+                ?: return respond(out, 400, "{\"error\":\"Lista de musicas invalida.\"}", true)
+        }
+        if (sl.exportCount(ids) == 0) return respond(out, 404, "{\"error\":\"Nada para exportar.\"}", true)
+        val name = (q["name"] ?: "").replace(Regex("[^\\p{L}\\p{N} ._-]"), "").trim().take(60).ifEmpty { "playlist" }
+        val encoded = java.net.URLEncoder.encode("$name.sincro", "UTF-8").replace("+", "%20")
+        val head = "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: application/octet-stream\r\n" +
+            "Content-Disposition: attachment; filename*=UTF-8''$encoded\r\n" +
+            "Cache-Control: no-store\r\n" +
+            "Connection: close\r\n\r\n"   // sem Content-Length: o fim do arquivo é o fim da conexão
+        out.write(head.toByteArray(Charsets.ISO_8859_1))
+        sl.exportTo(out, ids)
+        out.flush()
+    }
+
+    /** Recebe um .sincro (corpo = o arquivo). ?mode=replace troca a playlist; senão junta. */
+    private fun handleSetlistImport(req: Request, out: OutputStream) {
+        val sl = setlist ?: return respond(out, 404, "{\"error\":\"Repertorio indisponivel.\"}", true)
+        val input = req.stream ?: return respond(out, 400, "{\"error\":\"Sem arquivo.\"}", true)
+        val replace = CalibrationHub.parseQuery(req.path)["mode"] == "replace"
+        // lê só o tamanho combinado do corpo
+        val limited = object : InputStream() {
+            private var left = req.streamLength
+            override fun read(): Int {
+                if (left <= 0) return -1
+                val b = input.read()
+                if (b >= 0) left--
+                return b
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (left <= 0) return -1
+                val n = input.read(b, off, minOf(len.toLong(), left).toInt())
+                if (n > 0) left -= n
+                return n
+            }
+            fun drain() { val buf = ByteArray(65536); while (left > 0 && read(buf, 0, buf.size) > 0) { /* descarta o resto */ } }
+        }
+        val r = runCatching { sl.importFrom(limited, replace) }.getOrElse { Pair(400, JSONObject().put("error", "Arquivo .sincro invalido.")) }
+        runCatching { limited.drain() }
+        respond(out, r.first, r.second.toString(), true)
+    }
+
     private fun marksJson(): JSONObject {
         val o = JSONObject()
         scoreMarks.forEach { (sig, v) -> o.put(sig, JSONObject().put("marks", org.json.JSONArray(v.first)).put("offset", v.second)) }
@@ -356,7 +409,9 @@ class SessionServer(
                     keepOpen = true
                     return
                 }
-                val close = request.headers["connection"].equals("close", ignoreCase = true)
+                // exportar/abrir .sincro usa a conexão até o fim: depois dela, fecha
+                val close = request.headers["connection"].equals("close", ignoreCase = true) || request.stream != null ||
+                    request.path.substringBefore('?') == "/api/setlist/export"
                 route(request, output, close)
                 if (close) break
             }
@@ -389,6 +444,11 @@ class SessionServer(
             if (line.isEmpty()) break
             val idx = line.indexOf(':')
             if (idx > 0) headers[line.substring(0, idx).trim().lowercase(Locale.ROOT)] = line.substring(idx + 1).trim()
+        }
+        if (parts[0] == "POST" && parts[1].substringBefore('?') == "/api/setlist/import") {
+            val big = headers["content-length"]?.toLongOrNull() ?: -1L
+            if (big < 0 || big > 2_000_000_000L) throw IOException("Corpo grande demais")
+            return Request(parts[0], parts[1], headers, "", nowMs(), input, big)
         }
         val length = headers["content-length"]?.toIntOrNull() ?: 0
         if (length < 0 || length > 65_536) throw IOException("Corpo grande demais")
@@ -442,6 +502,10 @@ class SessionServer(
             req.method == "POST" && path == "/api/score/part" -> handleScorePart(req, out, close)
 
             (req.method == "GET" || req.method == "POST") && path == "/api/setlist" -> handleSetlist(req, out, close)
+
+            req.method == "GET" && path == "/api/setlist/export" -> handleSetlistExport(req, out)
+
+            req.method == "POST" && path == "/api/setlist/import" -> handleSetlistImport(req, out)
 
             req.method == "POST" && path == "/api/score/marks" -> {
                 val body = runCatching { JSONObject(req.body) }.getOrNull()
@@ -724,6 +788,7 @@ class SessionServer(
             200 -> "OK"
             400 -> "Bad Request"
             404 -> "Not Found"
+            409 -> "Conflict"
             405 -> "Method Not Allowed"
             else -> "Error"
         }

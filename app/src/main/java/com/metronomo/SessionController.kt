@@ -551,11 +551,26 @@ object SessionController {
     /** Modo palco aberto (tela cheia só com a partitura). Qualquer tela pode abrir. */
     val stageOpen = MutableStateFlow(false)
 
+    /** Arquivo .sincro aberto pelo gerenciador de arquivos (ou "compartilhar"), esperando o anfitrião escolher juntar/substituir. */
+    val pendingSincro = MutableStateFlow<Uri?>(null)
+
+    /** Lê o .sincro de [uri] para o repertório. Devolve a mensagem para mostrar. Chamar fora da thread principal. */
+    fun importSincro(ctx: Context, uri: Uri, replace: Boolean): String {
+        val r = runCatching { ctx.contentResolver.openInputStream(uri)?.use { setlistImport(it, replace) } }.getOrNull()
+            ?: return "Não foi possível ler o arquivo."
+        return if (r.first == 200) "Arquivo aberto: ${r.second.optInt("added")} música(s) na playlist."
+        else r.second.optString("error", "Arquivo inválido.")
+    }
+
     /** O que o Tocar da playlist dispara (caixas Metrônomo/Áudio). Compartilhado, então vale em qualquer tela. */
     val playWithMetro = MutableStateFlow(false)
     val playWithAudio = MutableStateFlow(true)
 
-    fun playTogether(metronome: Boolean, audio: Boolean) {
+    fun playTogether(metronomeWanted: Boolean, audioWanted: Boolean) {
+        // Sem nenhum áudio carregado (só partitura), "Áudio" não tem o que tocar: usa o metrônomo, que move a partitura.
+        val anyAudio = _groups.value.groups.any { it.file != null }
+        val audio = audioWanted && anyAudio
+        val metronome = metronomeWanted || (audioWanted && !anyAudio)
         val ck = clock ?: return
         val c = client
         val pb = audioPlayback

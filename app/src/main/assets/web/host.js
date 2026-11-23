@@ -222,7 +222,10 @@
   document.addEventListener('sincrono-score', () => { if (!busy.size && !document.activeElement?.closest?.('#groups-list')) renderGroups(); });
 
   // O que o Tocar dispara: metrônomo (clique + cursor da partitura) e/ou áudio, começando no mesmo instante.
-  const withMetro = () => $('with-metro').checked, withAudio = () => $('with-audio').checked;
+  // Sem nenhum áudio carregado (só partitura), o "Áudio" não tem o que tocar: o Tocar usa o metrônomo, que move a partitura.
+  const anyAudio = () => (groupsInfo.groups || []).some((g) => g.file);
+  const withAudio = () => $('with-audio').checked && anyAudio();
+  const withMetro = () => $('with-metro').checked || ($('with-audio').checked && !anyAudio());
   function metroSettings() { return typeof validSettings === 'function' ? validSettings() : { bpm: state.bpm, beatsPerBar: state.beatsPerBar }; }
   $('play-all').addEventListener('click', async () => {
     if (!withMetro() && !withAudio()) { hint('Marque Metrônomo e/ou Áudio.'); return; }
