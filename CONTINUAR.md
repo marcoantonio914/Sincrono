@@ -211,6 +211,11 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Limite: a cor não é escolhida pelo anfitrião (automática). Se quiser escolher, é preciso guardar a cor no grupo (API + app).
 - Teste novo: `tools/teste_cor_grupo.py`.
 
+## 9n. v28 — correção de compilação da v27 (primeiro erro real do compilador no cor por grupo)
+
+- `build_apk.py` da v27 falhou em `MetronomoApp.kt` (`PeerGroupPicker`): o projeto tem o seu próprio `FilledTonalButton` em `Components.kt`, sem parâmetro `colors`. Corrigido usando `androidx.compose.material3.FilledTonalButton` com `colors` e `shape` (cantos de 4 dp, como os outros botões) naquele ponto.
+- A v28 AINDA não foi compilada por mim; foi o compilador do usuário que achou o erro. O resto do Kotlin das versões anteriores compilou (o log só acusou essas 2 linhas).
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -241,3 +246,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v25: linha do tempo acompanha a música em tempo real (controle não fica mais preso).
 - v26: modo Página (vira sozinha) e diagrama de conexão.
 - v27: cor por grupo.
+- v28: correção de compilação (botão de grupo colorido).

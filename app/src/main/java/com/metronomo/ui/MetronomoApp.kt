@@ -657,8 +657,9 @@ private fun PeerGroupPicker(name: String, current: String, groups: List<GroupInf
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Box {
-            FilledTonalButton(
+            androidx.compose.material3.FilledTonalButton(
                 onClick = { open = true },
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
                 colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = groupColor(current), contentColor = androidx.compose.ui.graphics.Color.White),
             ) { Text(groups.firstOrNull { it.id == current }?.name ?: "Geral") }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
