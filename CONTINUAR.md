@@ -203,6 +203,14 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - Diagrama da conexão: `docs/conexao.svg` (e `.png`): roteador, computador anfitrião ou celular anfitrião, celulares por grupo; o que trafega (relógio, comandos, arquivos uma vez).
 - Atenção: textos antigos acima (seções 3/9 e README) dizem "cada músico pode trocar a sua parte"; desde a v22 só o anfitrião escolhe a parte.
 
+## 9m. v27 — cor por grupo
+
+- Cada grupo tem uma cor fixa, a mesma em todos os aparelhos, derivada do número do id (`g1`, `g2`…): Geral = cinza, depois azul, laranja, verde-azulado, roxo, vinho, verde, rosa, azul-claro, mostarda (10 cores, depois repete). Sem dado novo na rede: `web/groupcolor.js` (JS) e `ui/GroupColor.kt` (Kotlin) usam a mesma tabela.
+- Web: cartão do grupo (barra lateral e nome), seletor de grupo de cada aparelho, e na partitura uma moldura colorida + etiqueta "Grupo: nome" (nome vem de `/api/groups`, em `window.sincronoGroupNames`; no WebView do app só a moldura, o nome não está disponível ali).
+- Kotlin (NÃO compilado): nome colorido em `GroupRow`, botão/menu de grupo colorido em `PeerGroupPicker`. A moldura da partitura no app vem do `score-panel.js`.
+- Limite: a cor não é escolhida pelo anfitrião (automática). Se quiser escolher, é preciso guardar a cor no grupo (API + app).
+- Teste novo: `tools/teste_cor_grupo.py`.
+
 ## 9. Próximos passos sugeridos (em ordem)
 
 1. O usuário compila a v12 e devolve erros de compilação; corrigir.
@@ -232,3 +240,4 @@ Servidor HTTP simples (celular ou PC), mesmo formato nos dois:
 - v24: correção do palco (Marcar compassos cobria os botões).
 - v25: linha do tempo acompanha a música em tempo real (controle não fica mais preso).
 - v26: modo Página (vira sozinha) e diagrama de conexão.
+- v27: cor por grupo.

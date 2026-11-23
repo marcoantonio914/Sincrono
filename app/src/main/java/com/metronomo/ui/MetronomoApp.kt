@@ -601,7 +601,7 @@ private fun GroupRow(g: GroupInfo, level: Float, score: ScoreInfo, onPick: () ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatusDot(if (g.playing) Pal.Ok else Pal.Recessed, 8.dp)
-                    Text(g.name, fontWeight = FontWeight.Medium)
+                    Text(g.name, fontWeight = FontWeight.Bold, color = groupColor(g.id))
                 }
                 Text(g.file ?: "sem arquivo", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
             }
@@ -657,11 +657,14 @@ private fun PeerGroupPicker(name: String, current: String, groups: List<GroupInf
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Box {
-            FilledTonalButton(onClick = { open = true }) { Text(groups.firstOrNull { it.id == current }?.name ?: "Geral") }
+            FilledTonalButton(
+                onClick = { open = true },
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = groupColor(current), contentColor = androidx.compose.ui.graphics.Color.White),
+            ) { Text(groups.firstOrNull { it.id == current }?.name ?: "Geral") }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 groups.forEach { g ->
                     DropdownMenuItem(
-                        text = { Text(g.name) },
+                        text = { Text(g.name, color = groupColor(g.id), fontWeight = FontWeight.Bold) },
                         onClick = {
                             open = false
                             onPick(g.id)

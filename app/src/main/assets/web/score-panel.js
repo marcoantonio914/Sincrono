@@ -64,6 +64,16 @@
     draw();
   });
 
+  // cor do grupo: etiqueta com o nome (quando conhecido) e moldura colorida em volta da partitura
+  function paintGroup() {
+    const col = window.sincronoGroupColor ? window.sincronoGroupColor(myGroup()) : '#475569';
+    box.style.border = '3px solid ' + col; box.style.borderRadius = '10px';
+    const g = $('score-grp');
+    if (g) {
+      const nm = (window.sincronoGroupNames || {})[myGroup()];
+      g.hidden = !nm || stage; g.textContent = nm ? 'Grupo: ' + nm : ''; g.style.background = col;
+    }
+  }
   function draw() {
     if (!score) return;
     const m = curMode();
@@ -78,6 +88,7 @@
     view.setScore(score, partIndex());
     setupTimeline();
     drawnGroup = myGroup();
+    paintGroup();
     last = '';
   }
 

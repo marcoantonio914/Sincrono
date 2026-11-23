@@ -166,3 +166,6 @@ section.controls button.primary .ico, .controls button.primary .ico, .row.icons 
 /* v22: campos do metrônomo não estouram em telas de 320px */
 .met-card .fields > label { min-width: 0; }
 .met-card .fields input { width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* v27: cor do grupo */
+.gchip { display: inline-block; color: #fff; font-weight: 700; font-size: 14px; padding: 4px 14px; border-radius: 999px; margin: 6px 0; }

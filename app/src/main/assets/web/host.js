@@ -80,10 +80,10 @@
     if (!box || busy.size) return;
     box.textContent = '';
     for (const g of groupsInfo.groups) {
-      const d = document.createElement('div'); d.className = 'group';
+      const d = document.createElement('div'); d.className = 'group'; d.style.borderLeft = '6px solid ' + window.sincronoGroupColor(g.id); d.style.paddingLeft = '10px';
       const head = row();
       const dot = document.createElement('span'); dot.className = 'dot' + (g.playing ? ' on' : '');
-      const title = document.createElement('strong'); title.className = 'grow'; title.textContent = g.name;
+      const title = document.createElement('strong'); title.className = 'grow'; title.textContent = g.name; title.style.color = window.sincronoGroupColor(g.id);
       const file = document.createElement('span'); file.className = 'muted'; file.textContent = g.file || 'sem arquivo';
       head.append(dot, title, file); d.appendChild(head);
       const r1 = row();
@@ -152,6 +152,7 @@
       const name = document.createElement('strong'); name.className = 'grow'; name.textContent = dev.name + (dev.id === (typeof deviceId !== 'undefined' ? deviceId : '') ? ' (esta página)' : '');
       const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Grupo de ' + dev.name);
       for (const g of groupsInfo.groups) sel.add(new Option(g.name, g.id, false, g.id === dev.group));
+      sel.style.borderLeft = '6px solid ' + window.sincronoGroupColor(dev.group);
       sel.addEventListener('change', () => api('/api/groups', { op: 'assign', device: dev.id, group: sel.value }).then(refresh));
       head.append(name, sel); d.appendChild(head);
       d.appendChild(slider('d:' + dev.id, dev.level, (v) => api('/api/mix', { device: dev.id, level: v })));

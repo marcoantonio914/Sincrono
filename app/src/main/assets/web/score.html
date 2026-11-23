@@ -44,6 +44,7 @@
           <button id="marks-cancel" type="button">Cancelar</button>
           <label class="muted">Atraso do toque (ms) <input id="marks-delay" type="number" min="0" max="500" value="120" style="width:5em"></label>
         </div>
+        <div id="score-grp" class="gchip" hidden></div>
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>
       </section>
@@ -73,6 +74,7 @@
       if (/[?&]stage=1/.test(location.search)) document.body.classList.add('stage-page');
       document.body.classList.add('guest');
     </script>
+    <script src="/groupcolor.js"></script>
     <script src="/score.js"></script>
     <script src="/score-view.js"></script>
     <script src="/score-panel.js"></script>
