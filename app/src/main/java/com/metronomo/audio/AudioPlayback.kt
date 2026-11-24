@@ -29,6 +29,8 @@ class AudioPlayback(
     private val deviceId: String,
     private val player: AudioFilePlayer,
     private val onUi: (Ui) -> Unit,
+    /** Pasta de trabalho (cada tocador tem a sua: um não apaga os arquivos do outro). */
+    dirName: String = "audio",
 ) {
     data class Ui(
         val supported: Boolean = true,
@@ -43,7 +45,7 @@ class AudioPlayback(
         val durationMs: Double = 0.0,
     )
 
-    private val dir = File(context.applicationContext.cacheDir, "audio").also {
+    private val dir = File(context.applicationContext.cacheDir, dirName).also {
         it.mkdirs()
         it.listFiles()?.forEach { f -> runCatching { f.delete() } } // sobras de sessões anteriores
     }
@@ -67,12 +69,17 @@ class AudioPlayback(
     @Volatile
     private var sseConnection: HttpURLConnection? = null
 
+    /** Depois de [stop] os laços de consulta terminam e nada mais é aplicado (os tocadores de "Ouvir também" são parados no meio da sessão). */
+    @Volatile
+    private var stopped = false
+
     fun start() {
         scope.launch(Dispatchers.IO) { pollLoop() }
         scope.launch(Dispatchers.IO) { eventsLoop() }
     }
 
     fun stop() {
+        stopped = true
         runCatching { sseConnection?.disconnect() }
         prepareJob?.cancel()
         player.media = null
@@ -134,7 +141,7 @@ class AudioPlayback(
     }
 
     private suspend fun pollLoop() {
-        while (currentCoroutineContext().isActive) {
+        while (currentCoroutineContext().isActive && !stopped) {
             try {
                 val g = group
                 val path = "/api/audio?device=${URLEncoder.encode(deviceId, "UTF-8")}&ready=$readyId&group=${URLEncoder.encode(g, "UTF-8")}"
@@ -156,7 +163,7 @@ class AudioPlayback(
     /** Recebe o estado completo do áudio por SSE, assim que o anfitrião muda algo. */
     private suspend fun eventsLoop() {
         var backoffMs = 500L
-        while (currentCoroutineContext().isActive) {
+        while (currentCoroutineContext().isActive && !stopped) {
             try {
                 val sseGroup = group
                 val c = URL("$baseUrl/events/audio?group=${URLEncoder.encode(sseGroup, "UTF-8")}").openConnection() as HttpURLConnection
@@ -197,7 +204,7 @@ class AudioPlayback(
     /** Aceita sempre o estado COMPLETO; ignora o que for mais antigo que o último já aplicado (SSE e polling se cruzam). */
     @Synchronized
     private fun handle(json: JSONObject, forGroup: String) {
-        if (forGroup != group) return // resposta de um grupo que este aparelho já deixou
+        if (stopped || forGroup != group) return // resposta de um grupo que este aparelho já deixou
         val incoming = json.optLong("revision")
         if (incoming < lastRevision) return
         val fileJson = json.optJSONObject("file")
@@ -250,7 +257,7 @@ class AudioPlayback(
                     publishFor(fileId) { u -> u.copy(status = "Preparando o áudio… ${(progress * 100).toInt()}%") }
                 } ?: throw IllegalStateException("decode")
                 runCatching { download.delete() }
-                if (wantedId != fileId || group != forGroup) return // chegou outro arquivo (ou outro grupo) enquanto isso
+                if (stopped || wantedId != fileId || group != forGroup) return // chegou outro arquivo (ou outro grupo) enquanto isso
                 player.media = AudioFilePlayer.Media(pcm, info.sampleRate, info.channels, info.frames)
                 readyId = fileId
                 publishFor(fileId) { it.copy(ready = true, status = "Pronto.", durationMs = info.durationMs) }

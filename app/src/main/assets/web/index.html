@@ -184,6 +184,11 @@
           <button id="song-forward" type="button" aria-label="Avançar 10 segundos" title="Avançar 10 segundos"><svg class="ico" aria-hidden="true"><use href="#i-fwd"/></svg> 10</button>
         </div>
       </section>
+      <section id="extra-audio" class="offset" aria-label="Ouvir também" hidden>
+        <h2>Ouvir também</h2>
+        <p class="hint">Além do áudio do seu grupo, toque junto o de outros grupos (por exemplo o acompanhamento), cada um com o seu volume. Só este aparelho muda.</p>
+        <div id="extra-list"></div>
+      </section>
       <section id="mixer-devices" class="offset host-only" aria-label="Mixer do anfitrião">
         <h2>Mixer do anfitrião</h2>
         <p class="hint" id="mixer-hint">Volume de cada aparelho da sessão.</p>
@@ -230,6 +235,7 @@
     <script src="/qr.js"></script>
     <script src="/groupcolor.js"></script>
     <script src="/app.js"></script>
+    <script src="/extra-audio.js"></script>
     <script src="/host.js"></script>
     <script src="/score.js"></script>
     <script src="/score-view.js"></script>

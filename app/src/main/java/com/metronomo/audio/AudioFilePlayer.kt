@@ -50,6 +50,10 @@ class AudioFilePlayer(private val clock: ClockSync) {
     @Volatile
     var media: Media? = null
 
+    /** Ganho próprio deste tocador (1 = normal). Usado nos áudios de "Ouvir também", cada um com o seu volume. */
+    @Volatile
+    var gain: Double = 1.0
+
     @Volatile
     var userOffsetMs: Double = 0.0
 
@@ -227,7 +231,7 @@ class AudioFilePlayer(private val clock: ClockSync) {
                 }
 
                 // Volume (próprio × anfitrião) com rampa, aplicado ao bloco já montado.
-                val target = Mix.effective()
+                val target = Mix.effective() * gain.coerceIn(0.0, 1.0)
                 for (i in 0 until CHUNK_FRAMES) {
                     val g = ramp.next(target)
                     for (c in 0 until ch) buffer[i * ch + c] = (buffer[i * ch + c] * g).toInt().toShort()

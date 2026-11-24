@@ -272,3 +272,10 @@ Aplicado o patch `sincrono-pauta-oculta.patch` por cima da v29. A maior parte j�
 
 ### 9r. v32 — corrige 2 erros de compilação da v31
 `SetlistCard.kt` (`refresh` era declarada depois de `doImport`: agora recarrega a lista direto) e `SincroOpen.kt` (faltava `import androidx.compose.runtime.setValue`). Nada mais mudou. Kotlin ainda sem compilar por mim; o usuário confirma com `python3 build_apk.py`.
+
+### 9s. v33 — "Ouvir também": mais de um áudio ao mesmo tempo no mesmo aparelho
+Cada aparelho (inclusive o do anfitrião) toca o áudio do próprio grupo e, se marcar, o de outros grupos junto (ex.: piano de acompanhamento + a própria voz), cada um com o seu volume. Só afeta o aparelho que marcou; o anfitrião não precisa fazer nada.
+- **Como funciona:** cada grupo extra tem o seu tocador, que segue o estado daquele grupo no anfitrião (mesmo relógio, mesmo `startAt` do "Tocar"), então tudo continua alinhado. Os extras NÃO se registram como aparelho do grupo (consulta sem `device`), logo não mexem nas contagens "prontos/aparelhos" do anfitrião. Offsets de latência/calibração valem para todos os tocadores. O volume geral do aparelho (próprio × anfitrião) vale para o conjunto; cada extra tem o seu volume por cima.
+- **Web:** `extra-audio.js` (novo) + seção "Ouvir também" (`#extra-audio`, na aba MIXER) em `index.html`; escolha guardada em `localStorage` por servidor. Teste novo: `tools/teste_ouvir_tambem.py` (dois áudios tocando juntos, mesma posição, volume, parar, desmarcar) — passa; todos os outros também.
+- **App Android (NÃO compilado por mim):** `SessionController` (`extras`, `setExtra`, `setExtraVolume`, `syncExtras`, `stopExtras`; um `AudioFilePlayer` + `AudioPlayback` por extra, pasta própria `audio-x-<grupo>`), `AudioFilePlayer.gain`, `AudioPlayback` (`dirName`, `stopped`), `ui/ExtraAudio.kt` (cartão "Ouvir também", na aba SYNC do anfitrião e na tela do cliente). A seleção vale só na sessão (ids de grupo são de cada anfitrião).
+- **Limites:** vários AudioTracks ao mesmo tempo gastam mais CPU/bateria; cada extra baixa e decodifica o seu arquivo (memória). Sem painel de "pronto" por extra.

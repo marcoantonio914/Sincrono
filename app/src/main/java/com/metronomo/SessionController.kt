@@ -237,6 +237,8 @@ object SessionController {
         _mixLevels.value = emptyMap()
         client?.stop()
         engine?.stop()
+        stopExtras()
+        _extras.value = emptyMap()
         audioPlayback?.stop()
         audioPlayer?.stop()
         audioPlayback = null
@@ -284,7 +286,7 @@ object SessionController {
         val next = (_ui.value.offsetMs + delta).coerceIn(-200, 200)
         prefs.edit().putInt(manualKey(currentRoute), next).apply()
         engine?.userOffsetMs = next.toDouble()
-        audioPlayer?.userOffsetMs = next.toDouble()
+        forPlayers { it.userOffsetMs = next.toDouble() }
         _ui.update { it.copy(offsetMs = next) }
     }
 
@@ -445,8 +447,7 @@ object SessionController {
         currentStored = stored
         engine?.userOffsetMs = manual.toDouble()
         engine?.autoOffsetMs = auto
-        audioPlayer?.userOffsetMs = manual.toDouble()
-        audioPlayer?.autoOffsetMs = auto
+        forPlayers { it.userOffsetMs = manual.toDouble(); it.autoOffsetMs = auto }
         _ui.update {
             it.copy(
                 offsetMs = manual,
@@ -550,6 +551,66 @@ object SessionController {
      */
     /** Modo palco aberto (tela cheia só com a partitura). Qualquer tela pode abrir. */
     val stageOpen = MutableStateFlow(false)
+
+    // ---- "Ouvir também": áudios de outros grupos tocando junto com o do próprio grupo, cada um com o seu volume.
+    // Cada um tem o seu tocador e o seu acompanhamento do estado do grupo (mesmo relógio, mesmo instante de início).
+    // Não se registram como aparelho do grupo (deviceId vazio), então não mexem nas contagens do anfitrião.
+    private class Extra(val player: AudioFilePlayer, val playback: AudioPlayback)
+    private val extraPlayers = HashMap<String, Extra>()
+    private val _extras = MutableStateFlow<Map<String, Float>>(emptyMap())
+    /** Grupos marcados para ouvir também (id -> volume 0..1). Vale só nesta sessão (os ids dos grupos são de cada anfitrião). */
+    val extras: StateFlow<Map<String, Float>> = _extras.asStateFlow()
+
+    private fun forPlayers(block: (AudioFilePlayer) -> Unit) {
+        audioPlayer?.let(block)
+        synchronized(extraPlayers) { extraPlayers.values.forEach { block(it.player) } }
+    }
+
+    fun setExtra(groupId: String, on: Boolean) {
+        _extras.update { if (on) it + (groupId to (it[groupId] ?: 1f)) else it - groupId }
+        syncExtras()
+    }
+
+    fun setExtraVolume(groupId: String, volume: Float) {
+        val v = volume.coerceIn(0f, 1f)
+        _extras.update { if (groupId in it) it + (groupId to v) else it }
+        synchronized(extraPlayers) { extraPlayers[groupId]?.player?.gain = v.toDouble() }
+    }
+
+    /** Liga os tocadores dos grupos marcados (e que existem, têm áudio e não são o do próprio aparelho) e desliga os demais. */
+    private fun syncExtras() {
+        val app = appContext ?: return
+        val ck = clock ?: return
+        val sc = scope ?: return
+        val url = _ui.value.baseUrl
+        if (url.isEmpty()) return
+        val info = _groups.value
+        val mine = info.groupOf(deviceIdInUse)
+        val want = _extras.value.keys.filter { id -> id != mine && info.groups.any { it.id == id } }.toSet()
+        synchronized(extraPlayers) {
+            for (id in extraPlayers.keys.toList()) if (id !in want) {
+                extraPlayers.remove(id)?.let { it.playback.stop(); it.player.stop() }
+            }
+            for (id in want) if (id !in extraPlayers) {
+                val p = AudioFilePlayer(ck)
+                p.gain = (_extras.value[id] ?: 1f).toDouble()
+                p.userOffsetMs = audioPlayer?.userOffsetMs ?: 0.0
+                p.autoOffsetMs = audioPlayer?.autoOffsetMs ?: 0.0
+                val pb = AudioPlayback(app, url, ck, sc, "", p, { }, "audio-x-$id")
+                pb.setGroup(id)
+                extraPlayers[id] = Extra(p, pb)
+                p.start()
+                pb.start()
+            }
+        }
+    }
+
+    private fun stopExtras() {
+        synchronized(extraPlayers) {
+            extraPlayers.values.forEach { it.playback.stop(); it.player.stop() }
+            extraPlayers.clear()
+        }
+    }
 
     /** Arquivo .sincro aberto pelo gerenciador de arquivos (ou "compartilhar"), esperando o anfitrião escolher juntar/substituir. */
     val pendingSincro = MutableStateFlow<Uri?>(null)
@@ -850,6 +911,7 @@ object SessionController {
                 _groups.value = info
                 val mine = info.groupOf(deviceId)
                 audioPlayback?.setGroup(mine)
+                syncExtras()
                 val name = info.groups.firstOrNull { it.id == mine }?.name ?: "Geral"
                 _ui.update { if (it.groupId == mine && it.groupName == name) it else it.copy(groupId = mine, groupName = name) }
                 recomputeHostVolume()

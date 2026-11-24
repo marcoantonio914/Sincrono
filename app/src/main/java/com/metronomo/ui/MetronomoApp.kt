@@ -358,6 +358,7 @@ private fun SessionScreen(ui: UiState, tab: Int) {
             0 -> {
                 SyncTab(ui, bpm, beats, beatInfo, { bpm = it }, { beats = it })
                 ScoreCard(ui)
+                ExtraAudioCard(ui)
             }
             1 -> AudioTab(ui)
             2 -> SetlistCard()
@@ -1002,6 +1003,7 @@ private fun GuestScreen(ui: UiState) {
         StatusModule(ui)
         MetronomeViewModule(ui, beatInfo)
         AudioViewModule(ui)
+        ExtraAudioCard(ui)
         ScoreCard(ui)
         Module("Autocalibração", if (ui.autoCalibrated) String.format(Locale.ROOT, "%+.1f ms", ui.autoOffsetMs) else "não calibrado") {
             CalibrationSection(ui, ui.metronome.playing, groupCalibration = false)
