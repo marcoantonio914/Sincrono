@@ -81,7 +81,7 @@ fun SetlistCard() {
         scope.launch {
             message = "Abrindo o arquivo…"
             message = withContext(Dispatchers.IO) { SessionController.importSincro(ctx, uri, replace) }
-            refresh()
+            data = withContext(Dispatchers.IO) { SessionController.setlistJson() }
         }
     }
     pendingImport?.let { uri ->
