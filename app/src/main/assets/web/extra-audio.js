@@ -133,12 +133,14 @@
         save(); lastSig = ''; reconcile(); render();
       });
       if (on) {
-        const sl = document.createElement('input'); sl.type = 'range'; sl.min = '0'; sl.max = '100'; sl.value = String(Math.round((sel[g.id] ?? 1) * 100));
+        const sl = document.createElement('input'); sl.type = 'range'; sl.className = 'fader'; sl.style.setProperty('--accent', typeof sincronoGroupColor === 'function' ? sincronoGroupColor(g.id) : '#111827'); sl.min = '0'; sl.max = '100'; sl.value = String(Math.round((sel[g.id] ?? 1) * 100));
         sl.setAttribute('aria-label', 'Volume de ' + g.name);
         sl.addEventListener('input', () => {
+          sl.style.setProperty('--p', sl.value + '%');
           sel[g.id] = Number(sl.value) / 100; save();
           const p = players[g.id]; if (p) p.vol.gain.setTargetAtTime(sel[g.id], audioContext.currentTime, 0.03);
         });
+        sl.style.setProperty('--p', sl.value + '%');
         row.append(sl);
       }
       box.append(row);

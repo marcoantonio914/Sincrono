@@ -35,7 +35,7 @@ class SessionService : Service() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "metronomo:session").apply {
             setReferenceCounted(false)
-            acquire(4 * 60 * 60 * 1000L)
+            acquire()   // sem limite de tempo: o ensaio pode passar de 4 h; é solto em onDestroy
         }
         val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiLock = wm.createWifiLock(wifiMode(), "metronomo:wifi").apply {
@@ -44,7 +44,14 @@ class SessionService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            // botão "Encerrar sessão" da notificação
+            SessionController.leave(applicationContext)
+            stopSelf()
+        }
+        return START_NOT_STICKY
+    }
 
     override fun onDestroy() {
         runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
@@ -62,24 +69,42 @@ class SessionService : Service() {
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
     }
 
-    private fun buildNotification(): Notification {
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Metrônomo sincronizado")
-            .setContentText("Sessão ativa. Toque para abrir.")
-            .setContentIntent(open)
-            .setOngoing(true)
-            .build()
-    }
+    private fun buildNotification(): Notification = build(this, "Sessão ativa. Toque para abrir.")
 
     companion object {
         private const val CHANNEL_ID = "metronomo_session"
         private const val NOTIFICATION_ID = 1
+        private const val ACTION_STOP = "com.metronomo.action.STOP_SESSION"
+
+        private fun build(ctx: Context, text: String): Notification {
+            val open = PendingIntent.getActivity(
+                ctx,
+                0,
+                Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+            val stop = PendingIntent.getService(
+                ctx,
+                1,
+                Intent(ctx, SessionService::class.java).setAction(ACTION_STOP),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+            return NotificationCompat.Builder(ctx, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setContentTitle("Sincrono")
+                .setContentText(text)
+                .setContentIntent(open)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Encerrar sessão", stop)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .build()
+        }
+
+        /** Atualiza o texto da notificação (ex.: "Reconectando ao anfitrião…"). Sem efeito se o serviço não está rodando. */
+        fun updateText(ctx: Context, text: String) {
+            runCatching {
+                (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIFICATION_ID, build(ctx, text))
+            }
+        }
     }
 }

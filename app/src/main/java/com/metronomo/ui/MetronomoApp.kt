@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -358,7 +359,6 @@ private fun SessionScreen(ui: UiState, tab: Int) {
             0 -> {
                 SyncTab(ui, bpm, beats, beatInfo, { bpm = it }, { beats = it })
                 ScoreCard(ui)
-                ExtraAudioCard(ui)
             }
             1 -> AudioTab(ui)
             2 -> SetlistCard()
@@ -694,8 +694,6 @@ private fun PeerGroupPicker(name: String, current: String, groups: List<GroupInf
 @Composable
 private fun MixerTab(ui: UiState) {
     val context = LocalContext.current
-    val levels by SessionController.mixLevels.collectAsState()
-    val cal by SessionController.calibration.collectAsState()
     Module("Meu volume", "${(ui.ownVolume * 100).roundToInt()}%") {
         Fader("Este aparelho", ui.ownVolume.toFloat(), key = "own", onFinish = { SessionController.setOwnVolume(context, it.toDouble()) })
         if (ui.hostVolume < 0.995) {
@@ -712,19 +710,90 @@ private fun MixerTab(ui: UiState) {
             color = Pal.Graphite,
         )
     }
-    if (ui.role == SessionController.Role.HOST) {
-        Module("Mixer do anfitrião", "${cal.peers.size}") {
-            if (cal.peers.isEmpty()) {
-                Text("Os aparelhos aparecem aqui quando entram na sessão.", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+    ExtraAudioCard(ui)
+    if (ui.role == SessionController.Role.HOST) HostMixer()
+}
+
+/** Mixer do anfitrião: um cartão por grupo (cor, volume do grupo, mudo e solo) com os aparelhos dele dentro. */
+@Composable
+private fun HostMixer() {
+    val context = LocalContext.current
+    val levels by SessionController.mixLevels.collectAsState()
+    val cal by SessionController.calibration.collectAsState()
+    val groups by SessionController.groups.collectAsState()
+    Text("MIXER", style = LabelStyle)
+    for (g in groups.groups) {
+        val color = groupColor(g)
+        val devs = cal.peers.filter { groups.groupOf(it.id) == g.id }
+        val muted = (levels["g:${g.id}"] ?: 1.0) <= 0.0
+        val solo = SessionController.isGroupSolo(g.id)
+        val shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+        Row(
+            Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min).clip(shape).background(Pal.Surface).border(1.dp, Pal.Hairline, shape),
+        ) {
+            Box(Modifier.width(5.dp).fillMaxHeight().background(color))
+            Column(Modifier.weight(1f).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(g.name, style = MaterialTheme.typography.titleSmall, color = Pal.Ink, maxLines = 1)
+                        Text("${devs.size} ${if (devs.size == 1) "aparelho" else "aparelhos"}", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+                    }
+                    ToggleChip("Mudo", muted) { SessionController.toggleGroupMute(g.id) }
+                    ToggleChip("Solo", solo) { SessionController.toggleGroupSolo(g.id) }
+                }
+                Fader("Volume do grupo", (levels["g:${g.id}"] ?: 1.0).toFloat(), key = "g:${g.id}", accent = color,
+                    onFinish = { SessionController.setGroupVolume(g.id, it.toDouble()) })
+                devs.forEach { p ->
+                    Fader(
+                        "${p.name}${if (p.me) " (este)" else ""}",
+                        (levels[p.id] ?: 1.0).toFloat(),
+                        key = p.id,
+                        accent = color,
+                        onFinish = { SessionController.setDeviceVolume(context, p.id, it.toDouble()) },
+                    )
+                }
+                if (devs.isEmpty()) {
+                    Text("Nenhum aparelho neste grupo.", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+                }
             }
-            cal.peers.forEach { p ->
-                Fader(
-                    "${p.name}${if (p.me) " (este)" else ""}",
-                    (levels[p.id] ?: 1.0).toFloat(),
-                    key = p.id,
-                    onFinish = { SessionController.setDeviceVolume(context, p.id, it.toDouble()) },
-                )
-            }
+        }
+    }
+}
+
+/** Botão liga/desliga pequeno (Mudo, Solo). */
+@Composable
+private fun ToggleChip(text: String, on: Boolean, onClick: () -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+    Box(
+        Modifier
+            .clip(shape)
+            .background(if (on) Pal.Ink else Pal.Recessed)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = if (on) androidx.compose.ui.graphics.Color.White else Pal.Ink, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/** Ensaio longo: a economia de bateria do Android pode pausar o app do anfitrião. Aqui o anfitrião vê isso e abre o ajuste. */
+@Composable
+private fun BatteryCard() {
+    val context = LocalContext.current
+    val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+    val free = pm.isIgnoringBatteryOptimizations(context.packageName)
+    Module("Ensaio longo (anfitrião)", if (free) "BATERIA LIVRE" else "ATENÇÃO") {
+        Text(
+            if (free) "O Sincrono está sem restrição de bateria: a sessão não deve ser pausada pelo sistema com a tela apagada. Deixe também o celular carregando."
+            else "Para ensaios longos, tire o Sincrono da economia de bateria (escolha \"Todos os apps\", ache o Sincrono e marque \"Não otimizar\"). Sem isso, alguns celulares pausam o anfitrião com a tela apagada. Deixe também o celular carregando.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Pal.Graphite,
+        )
+        if (!free) {
+            androidx.compose.material3.FilledTonalButton(
+                onClick = { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Abrir ajuste de bateria") }
         }
     }
 }
@@ -734,6 +803,7 @@ private fun NetworkTab(ui: UiState) {
     Module("Qualidade da sincronização") {
         SyncQualityBlock(ui)
     }
+    if (ui.role == SessionController.Role.HOST) BatteryCard()
     if (ui.hostUrls.isNotEmpty()) {
         Module("Convite", "QR code") {
             Text("No outro celular, ou no navegador do computador, entre em:", style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)

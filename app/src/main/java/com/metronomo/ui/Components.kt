@@ -152,7 +152,7 @@ fun faderColors() = SliderDefaults.colors(
  * o dedo arrasta, vale o valor local, e [onFinish] é chamado ao soltar.
  */
 @Composable
-fun Fader(label: String, remote: Float, onFinish: (Float) -> Unit, key: Any = label) {
+fun Fader(label: String, remote: Float, onFinish: (Float) -> Unit, key: Any = label, accent: Color = Pal.Ink) {
     var dragging by remember(key) { mutableStateOf(false) }
     var value by remember(key) { mutableFloatStateOf(remote) }
     LaunchedEffect(remote, dragging) {
@@ -163,18 +163,18 @@ fun Fader(label: String, remote: Float, onFinish: (Float) -> Unit, key: Any = la
             Text(label, style = MaterialThemeBody(), modifier = Modifier.weight(1f))
             Text("${(value * 100).roundToInt()}%", style = TabularStyle)
         }
-        Slider(
+        SoftFader(
             value = value,
-            onValueChange = {
+            onChange = {
                 dragging = true
                 value = it
             },
-            onValueChangeFinished = {
+            onFinish = {
                 onFinish(value)
                 dragging = false
             },
-            colors = faderColors(),
-            modifier = Modifier.height(32.dp),
+            accent = accent,
+            description = label,
         )
     }
 }

@@ -153,24 +153,59 @@
   }
 
   // ---------- aparelhos / mixer ----------
+  // Mixer: um cartão por grupo (cor, volume do grupo, mudo/solo) com os aparelhos dele dentro.
+  const mxPrev = {};   // volume de cada grupo antes de ficar mudo
+  const gLevel = (id) => (typeof mix['g:' + id] === 'number' ? mix['g:' + id] : 1);
+  function setGroupLevel(id, v) { mix['g:' + id] = v; return api('/api/mix', { device: 'g:' + id, level: v }); }
+  const isSolo = (g) => groupsInfo.groups.length > 1 && gLevel(g.id) > 0 && groupsInfo.groups.every((o) => o.id === g.id || gLevel(o.id) === 0);
+  function toggleMute(g) {
+    if (gLevel(g.id) === 0) return setGroupLevel(g.id, mxPrev[g.id] || 1);
+    mxPrev[g.id] = gLevel(g.id);
+    return setGroupLevel(g.id, 0);
+  }
+  function toggleSolo(g) {
+    const others = groupsInfo.groups.filter((o) => o.id !== g.id);
+    if (isSolo(g)) return Promise.all(others.map((o) => setGroupLevel(o.id, mxPrev[o.id] || 1)));
+    const jobs = others.map((o) => { if (gLevel(o.id) > 0) mxPrev[o.id] = gLevel(o.id); return setGroupLevel(o.id, 0); });
+    if (gLevel(g.id) === 0) jobs.push(setGroupLevel(g.id, mxPrev[g.id] || 1));
+    return Promise.all(jobs);
+  }
+  function fader(key, value, accent, onDone, label) {
+    const el = slider(key, value, onDone);
+    el.className = 'fader'; el.style.setProperty('--accent', accent); el.setAttribute('aria-label', label);
+    const paint = () => el.style.setProperty('--p', el.value + '%');
+    el.addEventListener('input', paint); paint();
+    return el;
+  }
   function renderDevices() {
     const box = $('devices-list');
     if (!box || busy.size) return;
     box.textContent = '';
-    if (!devices.length) {
-      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Nenhum aparelho apareceu ainda.'; box.appendChild(p); return;
-    }
-    for (const dev of devices) {
-      const d = document.createElement('div'); d.className = 'group';
+    for (const g of groupsInfo.groups) {
+      const color = window.sincronoGroupColor(g.id);
+      const devs = devices.filter((d) => d.group === g.id);
+      const card = document.createElement('div'); card.className = 'mx-card'; card.style.borderLeftColor = color;
       const head = row();
-      const name = document.createElement('strong'); name.className = 'grow'; name.textContent = dev.name + (dev.id === (typeof deviceId !== 'undefined' ? deviceId : '') ? ' (esta página)' : '');
-      const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Grupo de ' + dev.name);
-      for (const g of groupsInfo.groups) sel.add(new Option(g.name, g.id, false, g.id === dev.group));
-      sel.style.borderLeft = '6px solid ' + window.sincronoGroupColor(dev.group);
-      sel.addEventListener('change', () => api('/api/groups', { op: 'assign', device: dev.id, group: sel.value }).then(refresh));
-      head.append(name, sel); d.appendChild(head);
-      d.appendChild(slider('d:' + dev.id, dev.level, (v) => api('/api/mix', { device: dev.id, level: v })));
-      box.appendChild(d);
+      const dot = document.createElement('span'); dot.className = 'extra-dot'; dot.style.background = color;
+      const name = document.createElement('strong'); name.className = 'grow'; name.textContent = g.name;
+      const cnt = document.createElement('span'); cnt.className = 'muted'; cnt.textContent = devs.length + (devs.length === 1 ? ' aparelho' : ' aparelhos');
+      const mute = button('Mudo', () => toggleMute(g).then(refresh), 'mx-btn'); mute.setAttribute('aria-pressed', String(gLevel(g.id) === 0));
+      const solo = button('Solo', () => toggleSolo(g).then(refresh), 'mx-btn'); solo.setAttribute('aria-pressed', String(isSolo(g)));
+      head.append(dot, name, cnt, mute, solo); card.appendChild(head);
+      card.appendChild(fader('g:' + g.id, gLevel(g.id), color, (v) => setGroupLevel(g.id, v).then(refresh), 'Volume do grupo ' + g.name));
+      for (const dev of devs) {
+        const d = document.createElement('div'); d.className = 'mx-dev';
+        const line = row();
+        const dn = document.createElement('span'); dn.className = 'grow'; dn.textContent = dev.name + (dev.id === (typeof deviceId !== 'undefined' ? deviceId : '') ? ' (esta página)' : '');
+        const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Grupo de ' + dev.name);
+        for (const o of groupsInfo.groups) sel.add(new Option(o.name, o.id, false, o.id === dev.group));
+        sel.addEventListener('change', () => api('/api/groups', { op: 'assign', device: dev.id, group: sel.value }).then(refresh));
+        line.append(dn, sel); d.appendChild(line);
+        d.appendChild(fader('d:' + dev.id, dev.level, color, (v) => api('/api/mix', { device: dev.id, level: v }), 'Volume de ' + dev.name));
+        card.appendChild(d);
+      }
+      if (!devs.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Nenhum aparelho neste grupo.'; card.appendChild(p); }
+      box.appendChild(card);
     }
   }
 

@@ -183,3 +183,20 @@ section.controls button.primary .ico, .controls button.primary .ico, .row.icons 
 .extra-row label { display: flex; align-items: center; gap: .4rem; min-width: 8rem; }
 .extra-row input[type=range] { flex: 1; min-width: 6rem; }
 .extra-dot { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; }
+
+/* Mixer: faders finos e um cartão por grupo */
+input[type=range].fader { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; margin: 2px 0; }
+input[type=range].fader::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--accent, #111827) var(--p, 100%), var(--recessed, #e9ecef) var(--p, 100%)); }
+input[type=range].fader::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; background: #fff; border: 2px solid var(--accent, #111827); }
+input[type=range].fader::-moz-range-track { height: 6px; border-radius: 3px; background: var(--recessed, #e9ecef); }
+input[type=range].fader::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent, #111827); }
+input[type=range].fader::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid var(--accent, #111827); }
+.mx-card { border: 1px solid var(--recessed, #e9ecef); border-left: 5px solid #475569; border-radius: 8px; padding: 10px 12px; margin: 10px 0; display: grid; gap: 4px; background: #fff; }
+.mx-dev { border-top: 1px solid var(--recessed, #e9ecef); padding-top: 6px; margin-top: 4px; }
+.mx-btn { min-width: 3.2rem; padding: 4px 10px; }
+.mx-btn[aria-pressed=true] { background: #111827; color: #fff; }
+.mx-card .row { flex-wrap: nowrap; align-items: center; gap: 8px; }
+.mx-card .row .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-card .mx-btn { width: auto; flex: none; min-height: 34px; padding: 0 12px; font-size: 13px; }
+.mx-card .muted { font-size: 12px; white-space: nowrap; }
+.mx-card select { width: auto; max-width: 45%; flex: none; }

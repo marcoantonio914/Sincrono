@@ -506,6 +506,33 @@ object SessionController {
         scope?.launch { mc.set("g:$groupId", v) }
     }
 
+    // ---- Mixer: mudo e solo por grupo (só o anfitrião). Mudo = volume do grupo 0; o volume anterior é lembrado.
+    private val groupPrev = HashMap<String, Double>()
+    private fun groupLevel(id: String) = _mixLevels.value["g:$id"] ?: 1.0
+
+    fun isGroupMuted(id: String) = groupLevel(id) <= 0.0
+
+    fun toggleGroupMute(id: String) {
+        if (isGroupMuted(id)) setGroupVolume(id, groupPrev[id] ?: 1.0)
+        else { groupPrev[id] = groupLevel(id); setGroupVolume(id, 0.0) }
+    }
+
+    /** Solo: este grupo é o único que não está mudo (e há mais de um grupo). */
+    fun isGroupSolo(id: String): Boolean {
+        val gs = _groups.value.groups
+        return gs.size > 1 && !isGroupMuted(id) && gs.all { it.id == id || isGroupMuted(it.id) }
+    }
+
+    fun toggleGroupSolo(id: String) {
+        val others = _groups.value.groups.filter { it.id != id }
+        if (isGroupSolo(id)) {
+            others.forEach { setGroupVolume(it.id, groupPrev[it.id] ?: 1.0) }
+        } else {
+            others.forEach { if (!isGroupMuted(it.id)) groupPrev[it.id] = groupLevel(it.id); setGroupVolume(it.id, 0.0) }
+            if (isGroupMuted(id)) setGroupVolume(id, groupPrev[id] ?: 1.0)
+        }
+    }
+
     /** Volume próprio deste aparelho (0..1). Vale junto com o volume que o anfitrião definiu. */
     fun setOwnVolume(context: Context, level: Double) {
         val v = level.coerceIn(0.0, 1.0)
@@ -1003,6 +1030,23 @@ object SessionController {
             }
         }
         ContextCompat.startForegroundService(app, Intent(app, SessionService::class.java))
+        // Texto da notificação sempre fiel ao estado: quem está longe da tela vê se a sessão caiu.
+        sc.launch {
+            var last = ""
+            while (isActive) {
+                val t = notificationText()
+                if (t != last) { last = t; SessionService.updateText(app, t) }
+                delay(4000)
+            }
+        }
+    }
+
+    private fun notificationText(): String {
+        val u = _ui.value
+        return if (u.role == Role.HOST) {
+            val n = _calibration.value.peers.count { !it.me }
+            if (n == 0) "Anfitrião: sessão ativa, aguardando aparelhos." else "Anfitrião: $n ${if (n == 1) "aparelho conectado" else "aparelhos conectados"}."
+        } else if (u.connected) "Conectado ao anfitrião." else "Reconectando ao anfitrião…"
     }
 
     /** Reúne o diagnóstico de sincronização. Roda na corrotina de interface, nunca na thread de áudio. */

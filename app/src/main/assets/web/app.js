@@ -688,6 +688,8 @@ initSong();
 const volumeSlider = document.getElementById('volume');
 if (volumeSlider) {
   volumeSlider.value = String(Math.round(ownVolume * 100));
+  const paintVol = () => volumeSlider.style.setProperty('--p', volumeSlider.value + '%');
+  paintVol(); volumeSlider.addEventListener('input', paintVol);
   volumeSlider.addEventListener('input', () => {
     ownVolume = Math.max(0, Math.min(1, Number(volumeSlider.value) / 100));
     try { localStorage.setItem('metronomo.ownVolume', String(ownVolume)); } catch { /* sem armazenamento */ }
