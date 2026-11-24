@@ -286,3 +286,6 @@ Cada aparelho (inclusive o do anfitrião) toca o áudio do próprio grupo e, se 
 - **Robustez do anfitrião (app, NÃO compilado):** WakeLock sem limite de 4 h (solto em `onDestroy`); notificação com texto vivo ("Anfitrião: N aparelhos", "Reconectando ao anfitrião…") e botão "Encerrar sessão"; cartão "Ensaio longo" na aba REDE do anfitrião (abre o ajuste de economia de bateria). A reconexão automática do cliente (SSE com espera crescente) e o serviço em primeiro plano já existiam.
 - **Robustez (web):** `wakelock.js` mantém a tela acesa enquanto algo toca e solta ao parar. Teste: `tools/teste_tela_acesa.py`.
 - **Adiado a pedido do usuário:** som gerado a partir da partitura (a ideia discutida era renderizar para WAV e usar como áudio de grupo; sem plano escrito ainda).
+
+### 9u. v35 — Pausar/Parar da playlist só com partitura (app)
+Causa: `SessionController.pauseTogether` mandava o comando de áudio primeiro e, se ele devolvia erro (sem áudio carregado), pulava o comando do metrônomo, então nada parava. Agora o comando de áudio só é enviado se algum grupo tem áudio, e um erro dele nunca impede o metrônomo (que move a partitura) de parar. A página já funcionava; `tools/teste_so_partitura.py` agora também cobre Pausar, tocar de novo e Parar só com partitura. Kotlin não compilado por mim.

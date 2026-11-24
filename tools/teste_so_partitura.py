@@ -56,8 +56,12 @@ try:
         x1 = pg.evaluate("parseFloat(document.querySelector('#score-view .ln').getAttribute('x1'))")
         check("só partitura: o cursor anda", x1 > x0 + 20, (x0, x1))
         pg.click('#tabs [data-go="playlist"]')
+        pg.click("#pause-all"); pg.wait_for_timeout(2300)
+        check("só partitura: Pausar para o metrônomo", not pg.evaluate("state.playing"))
+        pg.click("#play-all"); pg.wait_for_timeout(700)
+        check("só partitura: toca de novo depois de pausar", pg.evaluate("state.playing"))
         pg.click("#stop-all"); pg.wait_for_timeout(2300)
-        check("parar deixa tudo parado", not pg.evaluate("state.playing"))
+        check("só partitura: Parar deixa tudo parado", not pg.evaluate("state.playing"))
         # com áudio carregado, Áudio sozinho continua só áudio
         api("/api/audio/upload?group=g1&name=m.wav", raw=wav(), headers={"X-File-Type": "audio/wav"})
         pg.wait_for_timeout(2500)

@@ -688,11 +688,15 @@ object SessionController {
         scope?.launch {
             var error: String? = null
             val audioTocando = _audio.value.playing
-            if (pb != null) error = pb.command(if (stop) "stop" else "pause", null, "all")
-            if (error == null && c != null) {
+            // Só partitura (nenhum grupo com áudio): não há comando de áudio a enviar, e um erro dele nunca pode impedir
+            // que o metrônomo (que move a partitura) pare.
+            val temAudio = _groups.value.groups.any { it.file != null }
+            if (pb != null && temAudio) error = pb.command(if (stop) "stop" else "pause", null, "all")
+            if (c != null) {
                 if (audioTocando) kotlinx.coroutines.delay(1200)
                 val m = _ui.value.metronome
-                error = c.sendCommand("pause", Math.round(m.bpm).toInt(), m.beatsPerBar)
+                val erroMetronomo = c.sendCommand("pause", Math.round(m.bpm).toInt(), m.beatsPerBar)
+                if (error == null) error = erroMetronomo
             }
             _ui.update { it.copy(message = error) }
         }
