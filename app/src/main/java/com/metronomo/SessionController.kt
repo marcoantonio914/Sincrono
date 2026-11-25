@@ -678,6 +678,44 @@ object SessionController {
     }
 
     /**
+     * Caixas Metrônomo/Áudio em tempo real: com algo tocando, marcar liga e desmarcar desliga aquela parte na hora,
+     * sem parar a outra. Ao ligar, entra alinhada (na batida / na posição) com a que já está tocando.
+     * Sem nada tocando não faz nada (vale no próximo Tocar).
+     */
+    fun liveToggle(which: String, on: Boolean) {
+        val ck = clock ?: return
+        val c = client
+        val pb = audioPlayback
+        scope?.launch {
+            val audioPlaying = _audio.value.playing
+            val m = _ui.value.metronome
+            val metroPlaying = m.playing
+            if (!audioPlaying && !metroPlaying) return@launch
+            val interval = 60000.0 / m.bpm
+            val bpmInt = Math.round(m.bpm).toInt()
+            var error: String? = null
+            val anyAudio = _groups.value.groups.any { it.file != null }
+            if (which == "metro" && !on && metroPlaying && c != null) {
+                error = c.sendCommand("pause", bpmInt, m.beatsPerBar)
+            } else if (which == "metro" && on && !metroPlaying && audioPlaying && c != null) {
+                val t = ck.nowServerMs() + 2000.0
+                val posT = (pb?.positionMs() ?: 0.0) + 2000.0
+                val start = t + ((interval - posT % interval) % interval)
+                error = c.sendCommand("play", bpmInt, m.beatsPerBar, Math.round(start))
+            } else if (which == "audio" && !on && audioPlaying && pb != null) {
+                error = pb.command("pause", null, "all")
+            } else if (which == "audio" && on && !audioPlaying && metroPlaying && pb != null && anyAudio) {
+                val a = ck.nowServerMs() + 2000.0
+                val pos = pb.positionMs() ?: 0.0
+                val mStart = (m.startAt ?: return@launch).toDouble()
+                val d = (((mStart + pos - a) % interval) + interval) % interval
+                error = pb.command("play", null, "all", a + d)
+            }
+            _ui.update { it.copy(message = error) }
+        }
+    }
+
+    /**
      * Pausa (ou, com [stop], para e volta ao início) TUDO o que está tocando: música e metrônomo, não importa o que
      * esteja marcado nas caixas. O áudio para num instante combinado (AUDIO_STOP_MS adiante); o clique é parado junto
      * com ele, para os dois terminarem na mesma hora.

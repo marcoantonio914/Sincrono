@@ -151,6 +151,7 @@
       (sb && Math.round(sb) !== base ? ' · metrônomo em ' + Math.round(sb) + ' (o cursor acompanha o metrônomo)' : '');
   }
 
+  let loadedSig = '';
   let polling = false;
   async function poll(force) {
     if (polling && !force) return;
@@ -166,7 +167,9 @@
       const nm = $('score-name'); if (nm) nm.textContent = next.file ? 'Partitura: ' + next.file.name : 'Partitura: nenhuma';
       setHidden('score-tempo', !next.file); setHidden('score-remove', !next.file);
       if (!next.file) { score = null; loadedId = 0; box.textContent = ''; view = null; $('score-info').textContent = ''; sel.textContent = ''; publish(); return; }
-      if (next.file.id !== loadedId) await loadFile(next.file.id);
+      // id + nome + tamanho: depois que o anfitrião reinicia, o id pode se repetir com outra partitura
+      const fsig = next.file.id + '|' + next.file.name + '|' + next.file.size;
+      if (next.file.id !== loadedId || fsig !== loadedSig) { loadedSig = fsig; loadedId = 0; await loadFile(next.file.id); }
       else if (changedPart) { renderSelect(); draw(); }
       publish(); showInfo(); setupTimeline();
     } catch { /* servidor sem partitura: painel fica escondido */ }

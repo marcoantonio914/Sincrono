@@ -52,6 +52,7 @@ class AudioPlayback(
 
     private var ui = Ui()
     private var lastRevision = Long.MIN_VALUE
+    private var lastEpoch = 0L
 
     /** Grupo ("ilha") cujo arquivo este aparelho toca. Muda quando o anfitrião move o aparelho de grupo. */
     @Volatile
@@ -206,6 +207,17 @@ class AudioPlayback(
     private fun handle(json: JSONObject, forGroup: String) {
         if (stopped || forGroup != group) return // resposta de um grupo que este aparelho já deixou
         val incoming = json.optLong("revision")
+        // Anfitrião reiniciou (outra "época"): as revisões recomeçam e o id do arquivo pode se repetir com outro conteúdo.
+        // Sem isso, os estados novos eram ignorados como "antigos" e o cursor/áudio ficavam parados.
+        val epoch = json.optLong("epoch", 0L)
+        if (epoch != 0L && lastEpoch != 0L && epoch != lastEpoch) {
+            lastRevision = Long.MIN_VALUE
+            wantedId = 0L
+            readyId = 0L
+            lastPlan = null
+            player.plan = AudioFilePlayer.Plan(-1, false, 0.0, 0.0, Double.NaN)
+        }
+        if (epoch != 0L) lastEpoch = epoch
         if (incoming < lastRevision) return
         val fileJson = json.optJSONObject("file")
         val fileId = fileJson?.optLong("id") ?: 0L

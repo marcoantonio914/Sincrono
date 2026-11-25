@@ -220,6 +220,13 @@ class SessionServer(
         ScoreSnap(b, scoreName, HashMap(scoreParts), LinkedHashMap(scoreMarks))
     }
 
+    /** Novo startAt ao mudar o andamento sem parar: a batida atual (e a posição na partitura) não pula, só a velocidade muda. */
+    private fun keepPhase(cur: MetronomeState, newBpm: Double, now: Double): Long? {
+        val s = cur.startAt ?: return null
+        if (!cur.playing || cur.bpm <= 0.0) return s
+        return Math.round(now - (now - s) * cur.bpm / newBpm)
+    }
+
     /** Estado atual do metrônomo. */
     fun metronomeState(): MetronomeState = state
 
@@ -227,7 +234,7 @@ class SessionServer(
     fun applySettings(bpm: Double, beats: Int) {
         if (!(bpm >= MetronomeState.MIN_BPM && bpm <= MetronomeState.MAX_BPM && beats in MetronomeState.MIN_BEATS..MetronomeState.MAX_BEATS)) return
         val next = synchronized(stateLock) {
-            val updated = state.copy(bpm = bpm, beatsPerBar = beats, revision = state.revision + 1)
+            val updated = state.copy(bpm = bpm, beatsPerBar = beats, startAt = keepPhase(state, bpm, nowMs()), revision = state.revision + 1)
             state = updated
             updated
         }
@@ -668,10 +675,11 @@ class SessionServer(
             val startAt = if (!wanted.isNaN() && wanted >= nowNow - 3_600_000.0 && wanted <= nowNow + 15000.0) wanted.toLong() else (nowNow + LEAD_MS).toLong()
             val changed = when (type) {
                 "pause" -> current.copy(playing = false, startAt = startAt)
+                // tempo ao vivo: com o metrônomo tocando, mantém a batida e a posição na música (só muda a velocidade)
                 "settings" -> current.copy(
                     bpm = bpm,
                     beatsPerBar = beats,
-                    startAt = if (current.playing) startAt else current.startAt,
+                    startAt = keepPhase(current, bpm, nowNow),
                 )
                 else -> current.copy(bpm = bpm, beatsPerBar = beats, playing = true, startAt = startAt)
             }

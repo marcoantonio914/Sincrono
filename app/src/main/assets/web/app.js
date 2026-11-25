@@ -100,6 +100,17 @@ async function pollMix() {
 function validSettings() {
   return { bpm: Math.max(30, Math.min(300, Number(bpmInput.value) || 120)), beatsPerBar: Math.max(1, Math.min(12, Math.round(Number(beatsInput.value) || 4))) };
 }
+// Tempo ao vivo: mudar BPM/compasso vale na hora (depois de uma pequena pausa nos toques), sem parar a música;
+// o servidor mantém a batida e a posição na partitura.
+let settingsTimer = null;
+[bpmInput, beatsInput].forEach((el) => el.addEventListener('input', () => {
+  clearTimeout(settingsTimer);
+  settingsTimer = setTimeout(async () => {
+    const st = validSettings();
+    if (st.bpm === state.bpm && st.beatsPerBar === state.beatsPerBar) return;
+    try { await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'settings', ...st }) }); } catch { /* sem conexão */ }
+  }, 600);
+}));
 async function command(type) {
   const settings = validSettings();
   if (type !== 'pause') await getAudio().resume();
@@ -167,7 +178,7 @@ function stopTicking() {
 }
 
 function applyState(next) {
-  if (next.revision < state.revision) return;
+  if (next.epoch === state.epoch && next.revision < state.revision) return;   // outra "época" = o anfitrião reiniciou: vale o estado novo
   state = next;
   nextBeatIndex = null;
   bpmInput.value = state.bpm;
@@ -602,7 +613,8 @@ async function loadSongFile(id) {
 // Aceita sempre o estado COMPLETO; ignora o que for mais antigo que o último já aplicado
 // (o SSE e o polling se cruzam).
 function applySongState(next) {
-  if (songState && next.revision < songState.revision) return;
+  if (songState && next.epoch === songState.epoch && next.revision < songState.revision) return;   // outra época = anfitrião reiniciou
+  if (songState && next.epoch !== songState.epoch) { songLoadingId = -1; songRevision = -1; stopSongNode(); }   // refaz o arquivo: o id pode se repetir com outro conteúdo
   songState = next;
   const fileId = next.file ? next.file.id : 0;
   if (fileId !== songLoadingId) {

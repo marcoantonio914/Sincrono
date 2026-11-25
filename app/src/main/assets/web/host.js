@@ -288,6 +288,38 @@
     } catch { /* api já mostrou o erro */ }
     refresh();
   });
+  // Caixas Metrônomo/Áudio em tempo real: com algo tocando, marcar liga e desmarcar desliga aquela parte na hora,
+  // sem parar a outra. Ao ligar, entra alinhada (na batida / na posição) com a que já está tocando.
+  async function liveToggle(which) {
+    const audioPlaying = typeof songState !== 'undefined' && !!(songState && songState.playing);
+    const metroPlaying = !!state.playing;
+    if (!audioPlaying && !metroPlaying) return;            // nada tocando: vale só no próximo Tocar
+    const on = $(which === 'metro' ? 'with-metro' : 'with-audio').checked;
+    const s = metroSettings();
+    const interval = 60000 / s.bpm;
+    try {
+      if (which === 'metro' && !on && metroPlaying) {
+        await api('/api/command', { type: 'pause', bpm: s.bpm, beatsPerBar: s.beatsPerBar });
+      } else if (which === 'metro' && on && !metroPlaying && audioPlaying) {
+        // clique entra na batida da música: no instante t' a posição do áudio é múltiplo do intervalo
+        const t = serverNow() + 2000;
+        const posT = (songPositionMs() || 0) + 2000;
+        const start = t + ((interval - (posT % interval)) % interval);
+        await api('/api/command', { type: 'play', bpm: s.bpm, beatsPerBar: s.beatsPerBar, startAt: Math.round(start) });
+      } else if (which === 'audio' && !on && audioPlaying) {
+        await api('/api/audio/cmd?group=all', { type: 'pause' }, true).catch(() => {});
+      } else if (which === 'audio' && on && !audioPlaying && metroPlaying && anyAudio()) {
+        // áudio entra na batida do metrônomo: em A' a posição do áudio coincide com uma batida
+        const A = serverNow() + 2000;
+        const pos = songPositionMs() || 0;
+        const d = (((state.startAt + pos - A) % interval) + interval) % interval;
+        await api('/api/audio/cmd?group=all', { type: 'play', startAt: Math.round(A + d) });
+      }
+    } catch { /* api já mostrou o erro */ }
+    refresh();
+  }
+  $('with-metro').addEventListener('change', () => liveToggle('metro'));
+  $('with-audio').addEventListener('change', () => liveToggle('audio'));
   // Pausar/Parar valem para TUDO o que toca (música e metrônomo), independente das caixas. O áudio para num instante
   // combinado (1,2 s adiante); o metrônomo é parado junto, para os dois terminarem na mesma hora.
   async function pauseAll(kind) {

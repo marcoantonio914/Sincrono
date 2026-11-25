@@ -173,11 +173,11 @@ fun SetlistCard(ui: com.metronomo.SessionController.UiState) {
     ScoreCard(ui)
     // o que o Tocar dispara
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = withMetro, onCheckedChange = { SessionController.playWithMetro.value = it })
-        Text("Metrônomo", Modifier.clickable { SessionController.playWithMetro.value = !withMetro })
+        Checkbox(checked = withMetro, onCheckedChange = { SessionController.playWithMetro.value = it; SessionController.liveToggle("metro", it) })
+        Text("Metrônomo", Modifier.clickable { SessionController.playWithMetro.value = !withMetro; SessionController.liveToggle("metro", !withMetro) })
         androidx.compose.foundation.layout.Spacer(Modifier.size(16.dp))
-        Checkbox(checked = withAudio, onCheckedChange = { SessionController.playWithAudio.value = it })
-        Text("Áudio", Modifier.clickable { SessionController.playWithAudio.value = !withAudio })
+        Checkbox(checked = withAudio, onCheckedChange = { SessionController.playWithAudio.value = it; SessionController.liveToggle("audio", it) })
+        Text("Áudio", Modifier.clickable { SessionController.playWithAudio.value = !withAudio; SessionController.liveToggle("audio", !withAudio) })
     }
     Text(
         "O Tocar dispara áudio, metrônomo ou os dois, começando juntos. A partitura anda com o áudio; sem áudio, com o metrônomo (andamento da aba SYNC). Pausar e Parar valem para tudo.",

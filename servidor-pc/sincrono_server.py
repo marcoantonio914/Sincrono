@@ -78,6 +78,11 @@ _EPOCH_MS = time.time() * 1000.0
 _T0 = time.perf_counter()
 
 
+# Identifica esta execução do servidor: se o anfitrião reiniciar, os clientes veem outra "época" e aceitam o estado novo
+# mesmo que a revisão recomece em número menor (senão ignorariam tudo como "antigo").
+EPOCH = int(time.time() * 1000)
+
+
 def now_ms():
     """Relógio do servidor: base em ms 'de parede' + avanço monotônico com fração de ms."""
     return _EPOCH_MS + (time.perf_counter() - _T0) * 1000.0
@@ -194,6 +199,7 @@ class Hub:
                 "resetOnStop": self.reset_on_stop,
                 "ready": ready,
                 "devices": len(live),
+                "epoch": EPOCH,
             })
 
     def command(self, body, at=None):
@@ -258,7 +264,7 @@ class Session:
         self.lock = threading.RLock()
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.state = {"bpm": 120.0, "beatsPerBar": 4, "playing": False, "startAt": None, "revision": -1}
+        self.state = {"bpm": 120.0, "beatsPerBar": 4, "playing": False, "startAt": None, "revision": -1, "epoch": EPOCH}
         self.state_clients = []          # filas de eventos do metrônomo
         self.audio_clients = []          # (grupo, fila)
         self.group_names = {DEFAULT_GROUP: "Geral"}
@@ -306,7 +312,13 @@ class Session:
             if kind == "pause":
                 nxt.update(playing=False, startAt=start_at)
             elif kind == "settings":
-                nxt.update(bpm=float(bpm), beatsPerBar=int(beats), startAt=start_at if cur["playing"] else cur["startAt"])
+                # tempo ao vivo: com o metrônomo tocando, mantém a batida e a posição na música (só muda a velocidade)
+                new_bpm = float(bpm)
+                keep = cur["startAt"]
+                if cur["playing"] and cur["startAt"] is not None and cur["bpm"]:
+                    now = now_ms()
+                    keep = int(round(now - (now - cur["startAt"]) * float(cur["bpm"]) / new_bpm))
+                nxt.update(bpm=new_bpm, beatsPerBar=int(beats), startAt=keep)
             else:
                 nxt.update(bpm=float(bpm), beatsPerBar=int(beats), playing=True, startAt=start_at)
             nxt["revision"] = cur["revision"] + 1

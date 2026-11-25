@@ -29,6 +29,7 @@ class AudioHub(private val nowMs: () -> Double) {
     private var file: FileInfo? = null
     private var nextFileId = 1L
     private var revision = 0L
+    private val epoch = System.currentTimeMillis()   // muda quando o anfitrião reinicia (os clientes recomeçam a contar revisões)
     private var playing = false
     private var startAt = 0.0
     private var positionMs = 0.0
@@ -237,6 +238,7 @@ class AudioHub(private val nowMs: () -> Double) {
             .put("resetOnStop", resetOnStop)
             .put("ready", ready)
             .put("devices", live.size)
+            .put("epoch", epoch)
             .toString()
     }
 

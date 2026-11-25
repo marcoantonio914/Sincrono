@@ -15,6 +15,8 @@ data class MetronomeState(
     val playing: Boolean = false,
     val startAt: Long? = null,
     val revision: Long = -1,
+    /** Identifica a execução do servidor (muda quando o anfitrião reinicia); 0 = servidor antigo, sem época. */
+    val epoch: Long = 0,
 ) {
     fun toJson(): String = JSONObject().apply {
         put("bpm", bpm)
@@ -22,6 +24,7 @@ data class MetronomeState(
         put("playing", playing)
         put("startAt", startAt ?: JSONObject.NULL)
         put("revision", revision)
+        put("epoch", if (epoch != 0L) epoch else PROCESS_EPOCH)
     }.toString()
 
     companion object {
@@ -29,6 +32,7 @@ data class MetronomeState(
         const val MAX_BPM = 300
         const val MIN_BEATS = 1
         const val MAX_BEATS = 12
+        val PROCESS_EPOCH: Long = System.currentTimeMillis()
 
         fun fromJson(text: String): MetronomeState {
             val o = JSONObject(text)
@@ -38,6 +42,7 @@ data class MetronomeState(
                 playing = o.optBoolean("playing", false),
                 startAt = if (o.isNull("startAt")) null else o.getLong("startAt"),
                 revision = o.optLong("revision", 0),
+                epoch = o.optLong("epoch", 0),
             )
         }
     }
