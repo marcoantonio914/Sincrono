@@ -114,6 +114,18 @@
           <p id="score-msg" class="hint" aria-live="polite"></p>
         </div>
         <div id="groups-list"></div>
+        <div id="speed-card" class="group-score">
+          <div class="row"><strong class="grow">Velocidade do áudio (mantém o tom)</strong></div>
+          <div class="row">
+            <label>Gravado a <input id="speed-from" type="number" min="30" max="300" step="1" inputmode="numeric" style="width:5em"> bpm</label>
+            <label>Tocar a <input id="speed-to" type="number" min="30" max="300" step="1" inputmode="numeric" style="width:5em"> bpm</label>
+          </div>
+          <div class="row">
+            <button id="speed-go" type="button">Gerar áudio nesta velocidade</button>
+            <button id="speed-reset" type="button" hidden>Voltar ao original</button>
+          </div>
+          <p id="speed-msg" class="hint" aria-live="polite">Cria uma cópia mais lenta ou mais rápida de TODOS os áudios dos grupos, sem mudar o tom, e ajusta o metrônomo. Pare a música antes. O original fica guardado enquanto esta página estiver aberta.</p>
+        </div>
         <div class="row">
           <input id="new-group" class="grow" placeholder="Novo grupo (ex.: Violinos)" maxlength="40">
           <button id="add-group" type="button">Criar grupo</button>
@@ -238,6 +250,8 @@
     <script src="/app.js"></script>
     <script src="/extra-audio.js"></script>
     <script src="/wakelock.js"></script>
+    <script src="/stretch.js"></script>
+    <script src="/velocidade.js"></script>
     <script src="/host.js"></script>
     <script src="/score.js"></script>
     <script src="/score-view.js"></script>

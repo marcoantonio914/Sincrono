@@ -116,7 +116,7 @@
   function publish() {
     const names = score ? score.parts.map((p) => p.name) : [];
     const before = JSON.stringify(window.SincronoScoreInfo || null);
-    window.SincronoScoreInfo = { fileName: info.file ? info.file.name : '', partNames: names, parts: info.parts || {} };
+    window.SincronoScoreInfo = { fileName: info.file ? info.file.name : '', partNames: names, parts: info.parts || {}, initialBpm: score ? Math.round(score.initialBpm) : 0 };
     if (JSON.stringify(window.SincronoScoreInfo) !== before) document.dispatchEvent(new Event('sincrono-score'));
   }
   window.sincronoScoreSetPart = (group, part) => post('/api/score/part', { group, part });

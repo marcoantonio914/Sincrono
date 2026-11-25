@@ -172,6 +172,9 @@ class SessionServer(
         onScoreChanged?.invoke()
     }
 
+    /** Marcadores (ms de cada compasso, ajuste) de um áudio, ou null. */
+    fun scoreMarksFor(sig: String): Pair<List<Double>, Double>? = synchronized(scoreLock) { scoreMarks[sig] }
+
     /** Marcadores de compasso de um áudio (null apaga). Falso se inválidos. */
     fun setScoreMarks(sig: String, marks: List<Double>?, offset: Double): Boolean = synchronized(scoreLock) {
         if (sig.isEmpty() || sig.length > 300) return false

@@ -478,7 +478,53 @@ private fun AudioTab(ui: UiState) {
         }
     }
     // O que o grupo toca e o que ele lê são uma coisa só: arquivo de áudio + parte da partitura, no cartão do grupo.
-    if (ui.role == SessionController.Role.HOST) GroupsPanel()
+    if (ui.role == SessionController.Role.HOST) {
+        GroupsPanel()
+        SpeedCard(ui)
+    }
+}
+
+/** Só o anfitrião: cópia dos áudios numa velocidade nova (ex.: gravado a 120 bpm, tocar a 84), sem mudar o tom. */
+@Composable
+private fun SpeedCard(ui: UiState) {
+    val context = LocalContext.current
+    val score by SessionController.score.collectAsState()
+    val busy by SessionController.speedBusy.collectAsState()
+    val status by SessionController.speedStatus.collectAsState()
+    val canReset by SessionController.speedCanReset.collectAsState()
+    var from by rememberSaveable { mutableStateOf("") }
+    var to by rememberSaveable { mutableStateOf("") }
+    val fromShown = from.ifEmpty { (if (score.bpm > 0) Math.round(score.bpm).toInt() else Math.round(ui.metronome.bpm).toInt()).toString() }
+    val toShown = to.ifEmpty { Math.round(ui.metronome.bpm).toInt().toString() }
+    Module("Velocidade do áudio", "mantém o tom") {
+        Text(
+            "Cria uma cópia mais lenta ou mais rápida de TODOS os áudios dos grupos, sem mudar o tom, e ajusta o metrônomo. Pare a música antes. O original fica guardado enquanto o app estiver aberto.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Pal.Graphite,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = fromShown, onValueChange = { from = it.filter(Char::isDigit).take(3) },
+                label = { Text("Gravado a (bpm)") }, singleLine = true, modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+            )
+            OutlinedTextField(
+                value = toShown, onValueChange = { to = it.filter(Char::isDigit).take(3) },
+                label = { Text("Tocar a (bpm)") }, singleLine = true, modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(
+                onClick = { SessionController.changeSpeed(context, fromShown.toIntOrNull() ?: 0, toShown.toIntOrNull() ?: 0, false) },
+                enabled = !busy,
+            ) { Text("Gerar nesta velocidade") }
+            if (canReset) OutlinedButton(onClick = { SessionController.changeSpeed(context, fromShown.toIntOrNull() ?: 0, toShown.toIntOrNull() ?: 0, true) }, enabled = !busy) {
+                Text("Voltar ao original")
+            }
+        }
+        if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = Pal.Graphite)
+    }
 }
 
 /** Só o anfitrião: cria grupos, escolhe o arquivo de áudio e a parte da partitura de cada um, move aparelhos entre eles e toca todos juntos. */

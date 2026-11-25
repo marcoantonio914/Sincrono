@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import androidx.core.content.ContextCompat
 import com.metronomo.audio.AudioFilePlayer
 import com.metronomo.audio.AudioPlayback
+import com.metronomo.audio.AudioStretch
 import com.metronomo.audio.ClickEngine
 import com.metronomo.audio.Mix
 import com.metronomo.audio.OutputRoute
@@ -773,6 +774,82 @@ object SessionController {
         scope?.launch {
             val error = pb.command("seek", 0.0, targetGroup)
             _ui.update { it.copy(message = error) }
+        }
+    }
+
+    // ---- Velocidade do áudio (mantém o tom) ----
+    private class SpeedOrig(val file: File, val name: String, val mime: String, var stretchedName: String = "")
+    private val speedOrig = HashMap<String, SpeedOrig>()
+    val speedBusy = MutableStateFlow(false)
+    val speedStatus = MutableStateFlow("")
+    val speedCanReset = MutableStateFlow(false)
+
+    /**
+     * Anfitrião: gera uma cópia de TODOS os áudios dos grupos em outra velocidade (fator = [toBpm]/[fromBpm]), mantendo o tom,
+     * reescala os marcadores de compasso e ajusta o metrônomo. Com [restore], volta aos originais (guardados enquanto o app roda).
+     */
+    fun changeSpeed(context: Context, fromBpm: Int, toBpm: Int, restore: Boolean) {
+        val srv = server ?: return
+        if (speedBusy.value) return
+        val app = context.applicationContext
+        speedBusy.value = true
+        scope?.launch(Dispatchers.IO) {
+            try {
+                if (!restore && (fromBpm !in 30..300 || toBpm !in 30..300)) { speedStatus.value = "Informe os dois andamentos (30 a 300 bpm)."; return@launch }
+                val f = if (restore) 1.0 else toBpm.toDouble() / fromBpm
+                if (f < 0.4 || f > 2.5) { speedStatus.value = "A mudança passa do limite (de 0,4x a 2,5x a velocidade original)."; return@launch }
+                val groups = _groups.value.groups.filter { srv.hub(it.id)?.hasFile() == true }
+                if (groups.isEmpty()) { speedStatus.value = "Nenhum grupo tem áudio carregado."; return@launch }
+                if (groups.any { srv.hub(it.id)?.isPlaying() == true }) { speedStatus.value = "Pare a música antes de mudar a velocidade."; return@launch }
+                val dir = File(app.cacheDir, "audio-host").also { it.mkdirs() }
+                var done = 0
+                for (g in groups) {
+                    val hub = srv.hub(g.id) ?: continue
+                    val cur = hub.fileInfo() ?: continue
+                    var o = speedOrig[g.id]
+                    if (o == null || (o.stretchedName != cur.name && o.name != cur.name)) {
+                        // o arquivo mudou (ou é a primeira vez): o atual passa a ser o original
+                        val keep = File(dir, "orig-${g.id}-${System.currentTimeMillis()}.bin")
+                        cur.path.copyTo(keep, overwrite = true)
+                        speedOrig[g.id]?.let { runCatching { it.file.delete() } }
+                        o = SpeedOrig(keep, cur.name, cur.mime)
+                        speedOrig[g.id] = o
+                    }
+                    val target = File(dir, "host-${System.currentTimeMillis()}.bin")
+                    if (restore || Math.abs(f - 1.0) < 0.005) {
+                        o.file.copyTo(target, overwrite = true)
+                        hub.setFile(target, o.name, o.mime)
+                        o.stretchedName = ""
+                    } else {
+                        val semExt = o.name.replace(Regex("\\.[^.]+\$"), "")
+                        val base = semExt.replace(Regex(" \\(\\d+ bpm\\)\$"), "")
+                        val newName = "$base ($toBpm bpm).wav"
+                        val ok = AudioStretch.stretch(o.file, target, dir, f) { p ->
+                            speedStatus.value = "${g.name}: ajustando a velocidade… ${(p * 100).toInt()}% (${done + 1} de ${groups.size})"
+                        }
+                        if (!ok) {
+                            runCatching { target.delete() }
+                            speedStatus.value = "Não consegui processar o áudio de ${g.name}."
+                            return@launch
+                        }
+                        hub.setFile(target, newName, "audio/wav")
+                        o.stretchedName = newName
+                        srv.scoreMarksFor(o.name)?.let { (m, off) ->
+                            srv.setScoreMarks(newName, m.map { Math.round(it / f * 10.0) / 10.0 }, off)
+                        }
+                    }
+                    done++
+                }
+                val bpmNew = if (restore) fromBpm else toBpm
+                if (bpmNew in 30..300) client?.sendCommand("settings", bpmNew, _ui.value.metronome.beatsPerBar)
+                speedCanReset.value = speedOrig.values.any { it.stretchedName.isNotEmpty() }
+                speedStatus.value = if (restore || Math.abs(f - 1.0) < 0.005) "Áudios originais de volta."
+                else "Pronto: $done áudio(s) a $toBpm bpm (${Math.round(f * 100)}% da velocidade original), tom mantido. Metrônomo ajustado."
+            } catch (e: Exception) {
+                speedStatus.value = "Não deu certo: ${e.message}"
+            } finally {
+                speedBusy.value = false
+            }
         }
     }
 
