@@ -51,7 +51,7 @@ import org.json.JSONObject
  * cada grupo, partes, andamento e marcadores) de uma vez. A aba MÚSICA fica só para configurar a música de agora.
  */
 @Composable
-fun SetlistCard() {
+fun SetlistCard(ui: com.metronomo.SessionController.UiState) {
     val scope = rememberCoroutineScope()
     var data by remember { mutableStateOf<JSONObject?>(null) }
     var message by remember { mutableStateOf("") }
@@ -169,13 +169,8 @@ fun SetlistCard() {
         TransportButton(Glyph.STOP, "Parar todos e voltar ao início", { SessionController.pauseTogether(true) })
         TransportButton(Glyph.FORWARD, "Próxima música", { run(JSONObject().put("op", "next"), "Próxima carregada.") })
     }
-    // modo palco, à vista também aqui
-    val hasScore by SessionController.scoreFile.collectAsState()
-    if (hasScore.isNotEmpty()) {
-        androidx.compose.material3.FilledTonalButton(onClick = { SessionController.stageOpen.value = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("▢  Modo palco (tela cheia)")
-        }
-    }
+    // a partitura (com o botão do modo palco) fica aqui, junto dos controles: quem toca na PLAYLIST vê o cursor sem trocar de aba
+    ScoreCard(ui)
     // o que o Tocar dispara
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = withMetro, onCheckedChange = { SessionController.playWithMetro.value = it })

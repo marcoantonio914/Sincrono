@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -94,7 +95,12 @@ fun StageDialog(ui: UiState) {
             onDismissRequest = { SessionController.stageOpen.value = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
-            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White)) {
+            // A janela de um Dialog tem altura "wrap_content": fillMaxSize sozinho encolhia a partitura a uma linha.
+            // Por isso o tamanho da tela é imposto de forma explícita (e refeito ao girar o aparelho).
+            val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+            androidx.compose.foundation.layout.Box(
+                Modifier.requiredSize(cfg.screenWidthDp.dp, cfg.screenHeightDp.dp).background(androidx.compose.ui.graphics.Color.White),
+            ) {
                 ScoreWebView(ui.baseUrl, height = 0.dp, host = isHost, stage = true)
                 androidx.compose.material3.TextButton(
                     onClick = { SessionController.stageOpen.value = false },

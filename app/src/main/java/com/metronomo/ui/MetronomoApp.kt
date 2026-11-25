@@ -361,7 +361,7 @@ private fun SessionScreen(ui: UiState, tab: Int) {
                 ScoreCard(ui)
             }
             1 -> AudioTab(ui)
-            2 -> SetlistCard()
+            2 -> SetlistCard(ui)
             3 -> MixerTab(ui)
             else -> NetworkTab(ui)
         }

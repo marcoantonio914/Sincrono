@@ -11,10 +11,21 @@
 
   // ---------- abas ----------
   const tabs = ['sync', 'audio', 'playlist', 'mixer', 'net'];
+  // A partitura mora na aba SYNC, mas na PLAYLIST ela aparece junto dos controles (quem dá o play vê o cursor sem trocar de aba).
+  let scoreHome = null;
+  function moveScore(name) {
+    const sc = document.getElementById('score'), slot = document.getElementById('pl-score-slot');
+    if (!sc || !slot) return;
+    if (!scoreHome) scoreHome = { parent: sc.parentNode, next: sc.nextSibling };
+    if (name === 'playlist') { if (sc.parentNode !== slot) slot.appendChild(sc); }
+    else if (sc.parentNode === slot) scoreHome.parent.insertBefore(sc, scoreHome.next && scoreHome.next.parentNode === scoreHome.parent ? scoreHome.next : null);
+    setTimeout(() => { if (typeof window.sincronoScoreRedraw === 'function') window.sincronoScoreRedraw(); }, 30);
+  }
   function showTab(name) {
     if (!tabs.includes(name)) name = 'sync';
     document.querySelectorAll('.tab').forEach((el) => { el.hidden = el.dataset.tab !== name; });
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.go === name));
+    moveScore(name);
     try { localStorage.setItem('sincrono.tab', name); } catch { /* sem armazenamento */ }
     if (name === 'net') drawInvite();
     refresh();

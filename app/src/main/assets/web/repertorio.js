@@ -107,8 +107,7 @@
   const stageBtn = $('pl-stage');
   if (stageBtn) {
     stageBtn.addEventListener('click', () => {
-      const t = document.querySelector('#tabs [data-go="sync"]'); if (t) t.click();   // a partitura mora na aba SYNC
-      setTimeout(() => { if (window.sincronoStage) window.sincronoStage(true); }, 50);
+      if (window.sincronoStage) window.sincronoStage(true);   // a partitura aparece aqui mesmo, na aba PLAYLIST
     });
     setInterval(() => { stageBtn.hidden = !document.body.classList.contains('has-score'); }, 1000);
   }

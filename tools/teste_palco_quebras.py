@@ -37,11 +37,11 @@ try:
         check("botões redondos (modo, A−, A+, palco)", all(pg.eval_on_selector(i, "e => getComputedStyle(e).borderRadius") in ("50%", "22px") or float(pg.eval_on_selector(i, "e => parseFloat(getComputedStyle(e).borderTopLeftRadius)")) >= 20 for i in ("#score-mode", "#score-zoom-in", "#score-zoom-out", "#score-stage")))
         check("anfitrião vê o seletor de parte", pg.is_visible("#score-part"))
         modos = []
-        for _ in range(4):
+        for _ in range(5):
             modos.append(pg.evaluate("window.__scoreView.mode")); pg.click("#score-mode"); pg.wait_for_timeout(300)
-        check("botão cicla linha→página→linhas→partitura", modos == ["continuous", "page", "pages", "score"], modos)
+        check("botão cicla linha→página→inteira→linhas→partitura", modos == ["continuous", "page", "fit", "pages", "score"], modos)
         # modo 'score': sistemas = marcas new-system (25 no K284), sem rolagem horizontal
-        pg.click("#score-mode"); pg.click("#score-mode"); pg.click("#score-mode")  # continuous -> page -> pages -> score
+        pg.click("#score-mode"); pg.click("#score-mode"); pg.click("#score-mode"); pg.click("#score-mode")  # continuous -> page -> fit -> pages -> score
         pg.wait_for_timeout(400)
         check("modo 'score' ativo", pg.evaluate("window.__scoreView.mode") == "score", pg.evaluate("window.__scoreView.mode"))
         sw = pg.evaluate("[document.querySelector('#score-view').scrollWidth, document.querySelector('#score-view').clientWidth]")

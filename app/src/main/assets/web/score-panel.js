@@ -10,8 +10,8 @@
   let score = null, loadedId = 0, loadingId = 0, info = { file: null, parts: {}, rev: -1 };
   let view = null, drawnGroup = '', stage = /[?&]stage=1/.test(location.search), seeking = false, seekAt = 0;
   // visualizações: 'continuous' (uma linha rolando), 'pages' (quebra sozinha para caber na tela) e 'score' (respeita as quebras de linha da partitura)
-  const MODES = ['continuous', 'page', 'pages', 'score'];
-  const MODE_NAME = { continuous: 'Uma linha rolando', page: 'Página (vira sozinha)', pages: 'Linhas rolando', score: 'Quebras da partitura' };
+  const MODES = ['continuous', 'page', 'fit', 'pages', 'score'];
+  const MODE_NAME = { continuous: 'Uma linha rolando', page: 'Página (vira sozinha)', fit: 'Página inteira (tudo na tela)', pages: 'Linhas rolando', score: 'Quebras da partitura' };
   let mode = 'continuous', zoom = 1, stageMode = 'page', stageZoom = 1.4;
   try {
     const m = localStorage.getItem('sincrono.scoreMode'); if (MODES.includes(m)) mode = m;
@@ -25,6 +25,7 @@
   const ICON = {
     continuous: 'M3 12h18M16 7l5 5-5 5M8 7l-5 5 5 5',
     page: 'M6 3h12v18H6zM9 8h6M9 12h6M9 16h6',
+    fit: 'M3 3h18v18H3zM7 8h10M7 12h10M7 16h10',
     pages: 'M4 5h16M4 10h16M4 15h16M4 20h10',
     score: 'M3 7h18M3 12h18M3 17h18M9 5v14M15 5v14',
     stage: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
@@ -71,7 +72,7 @@
     const g = $('score-grp');
     if (g) {
       const nm = (window.sincronoGroupNames || {})[myGroup()];
-      g.hidden = !nm || stage; g.textContent = nm ? 'Grupo: ' + nm : ''; g.style.background = col;
+      g.hidden = !nm || stage; g.style.display = g.hidden ? 'none' : ''; g.textContent = nm ? 'Grupo: ' + nm : ''; g.style.background = col;
     }
   }
   window.sincronoRepaintGroup = () => { try { paintGroup(); } catch { /* ainda sem partitura */ } };
@@ -85,12 +86,30 @@
     if (!view) view = new SincronoScore.ScoreView(box, { mode: m, zoom: curZoom() });
     window.__scoreView = view;
     view.mode = m; view.zoom = curZoom(); view.stage = stage;
+    // no palco a caixa ocupa a janela inteira (garantido por script: não depende de 100vh, que varia em WebView/diálogos)
+    box.style.height = stage ? Math.max(160, window.innerHeight - (document.body.classList.contains('stage-page') ? 0 : 12)) + 'px' : '';
     view.onPick = (h) => { if (canSeek()) onPickMeasure(h); };
     view.setScore(score, partIndex());
+    if (m === 'fit') fitAll();
     setupTimeline();
     drawnGroup = myGroup();
     paintGroup();
     last = '';
+  }
+
+  // 'Página inteira': escolhe o maior zoom (até o do usuário) com que TODAS as linhas cabem na altura da caixa
+  function fitAll() {
+    const ceil = curZoom();
+    let z = ceil;
+    for (let i = 0; i < 14; i++) {
+      view.zoom = z; view.render();
+      const S = view.systems || [];
+      if (!S.length) break;
+      const need = S.length * (S[0].bottom - S[0].top) * (view.zEff || z);
+      if (need <= box.clientHeight - 4 || z <= 0.4) break;
+      z = Math.max(0.4, +(z - 0.1).toFixed(2));
+    }
+    view.zoom = ceil;
   }
 
   // Informa à camada do anfitrião (host.js) as partes e a escolha de cada grupo, para o cartão do grupo mostrar o seletor.
@@ -289,6 +308,7 @@
     draw();
   }
   on('score-stage', 'click', () => setStage(!stage));
+  window.sincronoScoreRedraw = () => { try { if (score && !sec.hidden) draw(); } catch { /* */ } };
   window.sincronoStage = (v) => setStage(v);   // usado pela aba PLAYLIST
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage) setStage(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && stage) setStage(false); });
