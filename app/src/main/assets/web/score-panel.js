@@ -311,6 +311,12 @@
     draw();
   }
   on('score-stage', 'click', () => setStage(!stage));
+  // Para o anfitrião (host.js) alinhar o relógio mudo / o clique / o áudio pela POSIÇÃO NA PARTITURA
+  window.sincronoScore = {
+    ms: () => (score ? scoreMs() : null),
+    scale: (bpm) => (score ? bpm / (score.initialBpm || bpm) : 1),
+    audioPos: (ms) => { const am = audioMarks(); return Math.max(0, score && am ? score.toAudio(am.marks, am.offset, ms) : ms); },
+  };
   window.sincronoScoreRedraw = () => { try { if (score && !sec.hidden) draw(); } catch { /* */ } };
   window.sincronoStage = (v) => setStage(v);   // usado pela aba PLAYLIST
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && stage) setStage(false); });

@@ -7,6 +7,11 @@
   if (!$('speed-go')) return;
   const orig = {};   // grupo -> { blob, name, stretchedName } (só nesta página aberta)
   let working = false;
+  // Os originais ficam também no IndexedDB do navegador: sobrevivem a recarregar a página (o botão "Voltar ao original" não some).
+  const idb = () => new Promise((res, rej) => { const r = indexedDB.open('sincrono-velocidade', 1); r.onupgradeneeded = () => r.result.createObjectStore('o'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  async function idbGet(k) { try { const d = await idb(); return await new Promise((res) => { const q = d.transaction('o').objectStore('o').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); } catch { return undefined; } }
+  async function idbSet(k, v) { try { const d = await idb(); await new Promise((res) => { const t = d.transaction('o', 'readwrite'); t.objectStore('o').put(v, k); t.oncomplete = res; t.onerror = res; }); } catch { /* sem armazenamento: vale só nesta página */ } }
+  const stretchedBpm = (name) => { const m = /\((\d+) bpm\)\.wav$/.exec(name || ''); return m ? Number(m[1]) : null; };
   const msg = (t) => { $('speed-msg').textContent = t; };
   const baseName = (n) => n.replace(/\.[^.]+$/, '').replace(/ \(\d+ bpm\)$/, '');
 
@@ -47,7 +52,11 @@
       const scoreNow = await json('/api/score').catch(() => ({ marks: {} }));
       let done = 0;
       for (const g of list) {
-        let o = orig[g.id];
+        let o = orig[g.id] || (orig[g.id] = (await idbGet(g.id)) || null);
+        if (restore && (!o || (o.stretchedName !== g.file.name && o.name !== g.file.name))) {
+          msg(`O original de ${g.name} não está guardado (a cópia foi feita em outro navegador ou os dados do site foram apagados). Carregue o arquivo original de novo.`);
+          return;
+        }
         if (!o || (o.stretchedName !== g.file.name && o.name !== g.file.name)) {   // o arquivo mudou: o atual passa a ser o original
           const r = await fetch(`/api/audio/file?id=${g.file.id}&group=${encodeURIComponent(g.id)}`);
           if (!r.ok) throw new Error('Não consegui baixar o áudio de ' + g.name + '.');
@@ -55,7 +64,7 @@
         }
         const prefix = `${g.name}: `;
         if (restore || Math.abs(f - 1) < 0.005) {
-          await upload(g.id, o.blob, o.name); o.stretchedName = '';
+          await upload(g.id, o.blob, o.name); o.stretchedName = ''; await idbSet(g.id, o);
         } else {
           msg(prefix + 'lendo o áudio…');
           const ctx = (typeof getAudio === 'function') ? getAudio() : new (window.AudioContext || window.webkitAudioContext)();
@@ -65,7 +74,7 @@
           const name = `${baseName(o.name)} (${Math.round(to)} bpm).wav`;
           msg(prefix + 'enviando…');
           await upload(g.id, window.sincronoWav(out, buf.sampleRate), name);
-          o.stretchedName = name;
+          o.stretchedName = name; await idbSet(g.id, o);
           const m = scoreNow.marks && scoreNow.marks[o.name];
           if (m && m.marks && m.marks.length) await setMarks(name, m.marks.map((x) => Math.round(x / f * 10) / 10), m.offset || 0);
         }
@@ -77,7 +86,7 @@
         const st = await json('/api/state').catch(() => null);
         if (st) await json('/api/command', { type: 'settings', bpm: bpmNew, beatsPerBar: st.beatsPerBar || 4 }).catch(() => {});
       }
-      $('speed-reset').hidden = !Object.values(orig).some((x) => x.stretchedName);
+      await refreshReset();
       msg(restore || Math.abs(f - 1) < 0.005 ? 'Áudios originais de volta.' : `Pronto: ${done} áudio(s) a ${Math.round(to)} bpm (${(f * 100).toFixed(0)}% da velocidade original), tom mantido. O metrônomo foi ajustado para ${Math.round(to)} bpm.`);
     } catch (e) {
       msg('Não deu certo: ' + e.message);
@@ -85,6 +94,30 @@
       working = false; $('speed-go').disabled = $('speed-reset').disabled = false;
     }
   }
+  // O botão "Voltar ao original" aparece sempre que algum áudio é uma cópia (nome "(N bpm).wav" ou cópia feita aqui)
+  async function refreshReset() {
+    try {
+      const list = await groupsWithAudio();
+      $('speed-reset').hidden = !list.some((g) => stretchedBpm(g.file.name) || (orig[g.id] && orig[g.id].stretchedName === g.file.name));
+    } catch { /* servidor fora */ }
+  }
+  // Acompanhar o metrônomo: o áudio é refeito quando o BPM muda e a música está parada
+  let pendingBpm = null, pendingSince = 0;
+  setInterval(async () => {
+    if (working || !$('speed-follow').checked || typeof state === 'undefined') return;
+    try {
+      const bpm = Math.round(state.bpm);
+      const list = await groupsWithAudio();
+      if (!list.length) return;
+      const cur = stretchedBpm(list[0].file.name) || Number($('speed-from').value);
+      if (!cur || Math.abs(bpm - cur) < 1) { pendingBpm = null; return; }
+      if (list.some((g) => g.playing)) { msg(`O áudio será ajustado a ${bpm} bpm quando a música parar.`); return; }
+      if (pendingBpm !== bpm) { pendingBpm = bpm; pendingSince = Date.now(); return; }
+      if (Date.now() - pendingSince < 1500) return;
+      pendingBpm = null; $('speed-to').value = bpm; run(false);
+    } catch { /* tenta de novo */ }
+  }, 700);
+  refreshReset(); setInterval(() => { if (!working) refreshReset(); }, 3000);
   $('speed-go').addEventListener('click', () => run(false));
   $('speed-reset').addEventListener('click', () => run(true));
   // sugestões iniciais: "gravado a" = andamento da partitura (se houver), "tocar a" = o do metrônomo

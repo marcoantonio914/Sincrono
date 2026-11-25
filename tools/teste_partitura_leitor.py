@@ -37,6 +37,13 @@ with sync_playwright() as p:
     check("duração total considera repetição e rit.", abs(r["total"] - esperado) < 1, (r["total"], esperado))
     check("locate(0) = compasso 1", r["l0"]["k"] == 0 and r["l0"]["q"] == 0, r["l0"])
     check("locate(2400) = ordem 1 (compasso 2)", r["l1"]["k"] == 1 and r["l1"]["m"] == 1, r["l1"])
+    # hino com 4 estrofes: uma barra de repetição com "times=4" (MuseScore: repetição com contagem 4)
+    m = lambda n, a="", e="": f'<measure number="{n}">{a}<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>whole</type><lyric number="1"><text>a</text></lyric><lyric number="2"><text>b</text></lyric></note>{e}</measure>'
+    at = '<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><direction><sound tempo="120"/></direction>'
+    bar = "<barline location='right'><bar-style>light-heavy</bar-style><repeat direction='backward' times='4'/></barline>"
+    xml4 = '<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>S</part-name></score-part></part-list><part id="P1">' + m(1, at) + m(2) + m(3, "", bar) + "</part></score-partwise>"
+    r4 = page.evaluate("(x) => { const s = SincronoScore.parseText(x); return { order: s.order.map(o => o.m + 1), total: s.totalMs }; }", xml4)
+    check("repetição com times=4 (4 estrofes): 12 compassos tocados", r4["order"] == [1, 2, 3] * 4 and abs(r4["total"] - 24000) < 1, r4)
     check("sem erros de JavaScript", not erros, erros)
     b.close()
 print("\n" + ("TUDO CERTO" if not falhas else "%d FALHA(S): %s" % (len(falhas), falhas)))

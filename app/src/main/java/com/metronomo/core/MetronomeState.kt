@@ -17,6 +17,8 @@ data class MetronomeState(
     val revision: Long = -1,
     /** Identifica a execução do servidor (muda quando o anfitrião reinicia); 0 = servidor antigo, sem época. */
     val epoch: Long = 0,
+    /** Relógio mudo (só partitura): o cursor anda, mas o clique não toca. */
+    val silent: Boolean = false,
 ) {
     fun toJson(): String = JSONObject().apply {
         put("bpm", bpm)
@@ -24,6 +26,7 @@ data class MetronomeState(
         put("playing", playing)
         put("startAt", startAt ?: JSONObject.NULL)
         put("revision", revision)
+        put("silent", silent)
         put("epoch", if (epoch != 0L) epoch else PROCESS_EPOCH)
     }.toString()
 
@@ -43,6 +46,7 @@ data class MetronomeState(
                 startAt = if (o.isNull("startAt")) null else o.getLong("startAt"),
                 revision = o.optLong("revision", 0),
                 epoch = o.optLong("epoch", 0),
+                silent = o.optBoolean("silent", false),
             )
         }
     }

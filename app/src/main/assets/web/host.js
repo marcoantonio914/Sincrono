@@ -274,46 +274,70 @@
   const withMetro = () => $('with-metro').checked || ($('with-audio').checked && !anyAudio());
   function metroSettings() { return typeof validSettings === 'function' ? validSettings() : { bpm: state.bpm, beatsPerBar: state.beatsPerBar }; }
   $('play-all').addEventListener('click', async () => {
-    if (!withMetro() && !withAudio()) { hint('Marque Metrônomo e/ou Áudio.'); return; }
     const startAt = serverNow() + 3000;
+    // Nenhuma caixa marcada = SÓ PARTITURA: um relógio mudo (metrônomo sem clique) faz o cursor andar.
+    const mudo = !withMetro() && !withAudio();
     try {
       if (withAudio()) await api('/api/audio/cmd?group=all', { type: 'play', startAt });
-      if (withMetro()) {
+      if (withMetro() || mudo) {
         const s = metroSettings();
         const interval = 60000 / s.bpm;
         const pos = withAudio() && typeof songPositionMs === 'function' ? (songPositionMs() || 0) : 0;
         const shift = pos > 1 ? (interval - (pos % interval)) % interval : 0;   // áudio retomado no meio: clique na próxima batida
-        await api('/api/command', { type: 'play', bpm: s.bpm, beatsPerBar: s.beatsPerBar, startAt: Math.round(startAt + shift) });
+        await api('/api/command', { type: 'play', bpm: s.bpm, beatsPerBar: s.beatsPerBar, startAt: Math.round(startAt + shift), silent: mudo });
       }
     } catch { /* api já mostrou o erro */ }
     refresh();
   });
   // Caixas Metrônomo/Áudio em tempo real: com algo tocando, marcar liga e desmarcar desliga aquela parte na hora,
-  // sem parar a outra. Ao ligar, entra alinhada (na batida / na posição) com a que já está tocando.
+  // sem parar a outra, e a posição na partitura é mantida. Com as DUAS desmarcadas a partitura segue andando
+  // (relógio mudo). Ao ligar, entra alinhada pela posição na partitura (ou pela batida, sem partitura).
   async function liveToggle(which) {
     const audioPlaying = typeof songState !== 'undefined' && !!(songState && songState.playing);
     const metroPlaying = !!state.playing;
     if (!audioPlaying && !metroPlaying) return;            // nada tocando: vale só no próximo Tocar
-    const on = $(which === 'metro' ? 'with-metro' : 'with-audio').checked;
+    const metroOn = $('with-metro').checked, audioOn = $('with-audio').checked;
     const s = metroSettings();
     const interval = 60000 / s.bpm;
+    const SC = window.sincronoScore;
+    const msNow = SC ? SC.ms() : null;
+    const hasPos = msNow !== null && msNow !== undefined;
+    const cmd = (extra) => api('/api/command', Object.assign({ bpm: s.bpm, beatsPerBar: s.beatsPerBar }, extra));
     try {
-      if (which === 'metro' && !on && metroPlaying) {
-        await api('/api/command', { type: 'pause', bpm: s.bpm, beatsPerBar: s.beatsPerBar });
-      } else if (which === 'metro' && on && !metroPlaying && audioPlaying) {
-        // clique entra na batida da música: no instante t' a posição do áudio é múltiplo do intervalo
-        const t = serverNow() + 2000;
-        const posT = (songPositionMs() || 0) + 2000;
-        const start = t + ((interval - (posT % interval)) % interval);
-        await api('/api/command', { type: 'play', bpm: s.bpm, beatsPerBar: s.beatsPerBar, startAt: Math.round(start) });
-      } else if (which === 'audio' && !on && audioPlaying) {
-        await api('/api/audio/cmd?group=all', { type: 'pause' }, true).catch(() => {});
-      } else if (which === 'audio' && on && !audioPlaying && metroPlaying && anyAudio()) {
-        // áudio entra na batida do metrônomo: em A' a posição do áudio coincide com uma batida
-        const A = serverNow() + 2000;
-        const pos = songPositionMs() || 0;
-        const d = (((state.startAt + pos - A) % interval) + interval) % interval;
-        await api('/api/audio/cmd?group=all', { type: 'play', startAt: Math.round(A + d) });
+      if (!metroOn && !audioOn) {
+        if (metroPlaying) {
+          await cmd({ type: 'settings', silent: true });                       // o clique cala; o relógio segue
+        } else if (audioPlaying) {
+          const T = serverNow() + 1200;                                        // o áudio para daqui a ~1,2 s
+          if (hasPos) await cmd({ type: 'play', silent: true, startAt: Math.round(T - (msNow + 1200) / SC.scale(s.bpm)) });
+          await api('/api/audio/cmd?group=all', { type: 'pause' }, true).catch(() => {});
+        }
+      } else if (which === 'metro' && !metroOn) {
+        if (metroPlaying) await cmd({ type: 'pause' });
+      } else if (which === 'metro' && metroOn) {
+        if (metroPlaying && state.silent) {
+          await cmd({ type: 'settings', silent: false });                      // o clique volta, já na posição certa
+        } else if (!metroPlaying && audioPlaying) {
+          const T = serverNow() + 2000;
+          let start;
+          if (hasPos) start = T - (msNow + 2000) / SC.scale(s.bpm);            // clique no compasso da partitura
+          else { const posT = (songPositionMs() || 0) + 2000; start = T + ((interval - (posT % interval)) % interval); }
+          await cmd({ type: 'play', silent: false, startAt: Math.round(start) });
+        }
+      } else if (which === 'audio' && !audioOn) {
+        if (audioPlaying) await api('/api/audio/cmd?group=all', { type: 'pause' }, true).catch(() => {});
+      } else if (which === 'audio' && audioOn && !audioPlaying && metroPlaying && anyAudio()) {
+        const T = serverNow() + 2000;
+        if (hasPos) {
+          // o áudio entra na posição da partitura em que o relógio estará em T
+          const msT = msNow + 2000 * SC.scale(s.bpm);
+          await api('/api/audio/cmd?group=all', { type: 'seek', positionMs: Math.round(SC.audioPos(msT)), startAt: T });
+          await api('/api/audio/cmd?group=all', { type: 'play', startAt: T });
+        } else {
+          const pos = songPositionMs() || 0;                                   // sem partitura: na batida do metrônomo
+          const d = (((state.startAt + pos - T) % interval) + interval) % interval;
+          await api('/api/audio/cmd?group=all', { type: 'play', startAt: Math.round(T + d) });
+        }
       }
     } catch { /* api já mostrou o erro */ }
     refresh();

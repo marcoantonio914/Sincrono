@@ -33,6 +33,12 @@ try {
 } catch { /* sem armazenamento */ }
 
 function serverNow() { return Date.now() + offsetMs; }
+// Navegadores só liberam o som depois de um gesto do usuário. Aqui, o PRIMEIRO toque/clique/tecla em qualquer lugar da
+// página já liga o som (sem precisar do botão "Ativar som"). No Firefox dá para liberar de vez: ícone à esquerda do
+// endereço → Permissões → "Reproduzir áudio e vídeo automaticamente" → Permitir.
+['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, () => {
+  try { if (audioContext && audioContext.state === 'running') return; getAudio().resume(); } catch { /* sem áudio */ }
+}, { passive: true }));
 function getAudio() {
   if (!audioContext) audioContext = new AudioContext({ latencyHint: 'interactive' });
   return audioContext;
@@ -119,6 +125,7 @@ async function command(type) {
 }
 
 function clickAt(audioTime, accented) {
+  if (state && state.silent) return;   // relógio mudo (só partitura)
   const context = getAudio();
   const oscillator = context.createOscillator();
   const gain = context.createGain();

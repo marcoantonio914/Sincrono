@@ -195,7 +195,7 @@ class ClickEngine(private val clock: ClockSync) {
                 }
 
                 for (i in 0 until CHUNK_FRAMES) {
-                    if (i == triggerIndex) {
+                    if (i == triggerIndex && !s.silent) {
                         clickPos = 0
                         clickAccent = triggerAccent
                     }

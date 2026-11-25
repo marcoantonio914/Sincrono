@@ -659,7 +659,9 @@ object SessionController {
         // Sem nenhum áudio carregado (só partitura), "Áudio" não tem o que tocar: usa o metrônomo, que move a partitura.
         val anyAudio = _groups.value.groups.any { it.file != null }
         val audio = audioWanted && anyAudio
-        val metronome = metronomeWanted || (audioWanted && !anyAudio)
+        // Nenhuma caixa marcada = SÓ PARTITURA: relógio mudo (metrônomo sem clique) faz o cursor andar.
+        val mudo = !metronomeWanted && !audioWanted
+        val metronome = metronomeWanted || (audioWanted && !anyAudio) || mudo
         val ck = clock ?: return
         val c = client
         val pb = audioPlayback
@@ -672,7 +674,7 @@ object SessionController {
                 val interval = 60000.0 / m.bpm
                 val pos = if (audio) (pb?.positionMs() ?: 0.0) else 0.0
                 val shift = if (audio && pos > 1.0) (interval - pos % interval) % interval else 0.0
-                error = c.sendCommand("play", Math.round(m.bpm).toInt(), m.beatsPerBar, (startAt + shift).toLong())
+                error = c.sendCommand("play", Math.round(m.bpm).toInt(), m.beatsPerBar, (startAt + shift).toLong(), silent = mudo)
             }
             _ui.update { it.copy(message = error) }
         }
@@ -687,6 +689,8 @@ object SessionController {
         val ck = clock ?: return
         val c = client
         val pb = audioPlayback
+        val metroOn = if (which == "metro") on else playWithMetro.value
+        val audioOn = if (which == "audio") on else playWithAudio.value
         scope?.launch {
             val audioPlaying = _audio.value.playing
             val m = _ui.value.metronome
@@ -696,21 +700,37 @@ object SessionController {
             val bpmInt = Math.round(m.bpm).toInt()
             var error: String? = null
             val anyAudio = _groups.value.groups.any { it.file != null }
-            if (which == "metro" && !on && metroPlaying && c != null) {
+            if (!metroOn && !audioOn) {
+                // nenhum ligado: a partitura continua andando num relógio mudo
+                if (metroPlaying && c != null) {
+                    error = c.sendCommand("settings", bpmInt, m.beatsPerBar, null, silent = true)
+                } else if (audioPlaying && pb != null && c != null) {
+                    // posição na partitura ~ posição do áudio (sem marcadores de compasso; com eles o cursor pode saltar: use a linha do tempo)
+                    val t = ck.nowServerMs() + 1200.0
+                    val posT = (pb.positionMs() ?: 0.0) + 1200.0
+                    val scale = if (score.value.bpm > 0) m.bpm / score.value.bpm else 1.0
+                    error = c.sendCommand("play", bpmInt, m.beatsPerBar, Math.round(t - posT / scale), silent = true)
+                    if (error == null) error = pb.command("pause", null, "all")
+                }
+            } else if (which == "metro" && !on && metroPlaying && c != null) {
                 error = c.sendCommand("pause", bpmInt, m.beatsPerBar)
+            } else if (which == "metro" && on && metroPlaying && m.silent && c != null) {
+                error = c.sendCommand("settings", bpmInt, m.beatsPerBar, null, silent = false)   // o clique volta, já na posição certa
             } else if (which == "metro" && on && !metroPlaying && audioPlaying && c != null) {
                 val t = ck.nowServerMs() + 2000.0
                 val posT = (pb?.positionMs() ?: 0.0) + 2000.0
                 val start = t + ((interval - posT % interval) % interval)
-                error = c.sendCommand("play", bpmInt, m.beatsPerBar, Math.round(start))
+                error = c.sendCommand("play", bpmInt, m.beatsPerBar, Math.round(start), silent = false)
             } else if (which == "audio" && !on && audioPlaying && pb != null) {
                 error = pb.command("pause", null, "all")
             } else if (which == "audio" && on && !audioPlaying && metroPlaying && pb != null && anyAudio) {
                 val a = ck.nowServerMs() + 2000.0
-                val pos = pb.positionMs() ?: 0.0
                 val mStart = (m.startAt ?: return@launch).toDouble()
-                val d = (((mStart + pos - a) % interval) + interval) % interval
-                error = pb.command("play", null, "all", a + d)
+                val scale = if (score.value.bpm > 0) m.bpm / score.value.bpm else 1.0
+                // posição do relógio em a (ms da partitura ~ ms do áudio, sem marcadores) para o áudio entrar no mesmo ponto
+                val posAudio = (a - mStart) * scale
+                error = pb.command("seek", posAudio, "all", a)
+                if (error == null) error = pb.command("play", null, "all", a)
             }
             _ui.update { it.copy(message = error) }
         }
@@ -780,6 +800,18 @@ object SessionController {
     // ---- Velocidade do áudio (mantém o tom) ----
     private class SpeedOrig(val file: File, val name: String, val mime: String, var stretchedName: String = "")
     private val speedOrig = HashMap<String, SpeedOrig>()
+    // o original (e seus dados) ficam em disco: o botão "Voltar ao original" sobrevive a reiniciar o app
+    private fun loadOrig(dir: File, gid: String): SpeedOrig? {
+        val f = File(dir, "orig-$gid.bin")
+        val t = File(dir, "orig-$gid.txt")
+        if (!f.exists() || !t.exists()) return null
+        val l = runCatching { t.readLines() }.getOrNull() ?: return null
+        if (l.size < 2) return null
+        return SpeedOrig(f, l[0], l[1], l.getOrElse(2) { "" })
+    }
+    private fun saveOrig(dir: File, gid: String, o: SpeedOrig) {
+        runCatching { File(dir, "orig-$gid.txt").writeText("${o.name}\n${o.mime}\n${o.stretchedName}\n") }
+    }
     val speedBusy = MutableStateFlow(false)
     val speedStatus = MutableStateFlow("")
     val speedCanReset = MutableStateFlow(false)
@@ -806,20 +838,27 @@ object SessionController {
                 for (g in groups) {
                     val hub = srv.hub(g.id) ?: continue
                     val cur = hub.fileInfo() ?: continue
-                    var o = speedOrig[g.id]
-                    if (o == null || (o.stretchedName != cur.name && o.name != cur.name)) {
-                        // o arquivo mudou (ou é a primeira vez): o atual passa a ser o original
-                        val keep = File(dir, "orig-${g.id}-${System.currentTimeMillis()}.bin")
-                        cur.path.copyTo(keep, overwrite = true)
-                        speedOrig[g.id]?.let { runCatching { it.file.delete() } }
-                        o = SpeedOrig(keep, cur.name, cur.mime)
-                        speedOrig[g.id] = o
+                    val existing = speedOrig[g.id] ?: loadOrig(dir, g.id)?.also { speedOrig[g.id] = it }
+                    val mudou = existing == null || (existing.stretchedName != cur.name && existing.name != cur.name)
+                    if (restore && mudou) {
+                        speedStatus.value = "O original de ${g.name} não está guardado (o app foi limpo ou o arquivo foi trocado). Carregue o arquivo original de novo."
+                        return@launch
                     }
+                    val o: SpeedOrig = if (mudou) {
+                        // o arquivo mudou (ou é a primeira vez): o atual passa a ser o original (guardado também em disco)
+                        val keep = File(dir, "orig-${g.id}.bin")
+                        cur.path.copyTo(keep, overwrite = true)
+                        val novo = SpeedOrig(keep, cur.name, cur.mime)
+                        speedOrig[g.id] = novo
+                        saveOrig(dir, g.id, novo)
+                        novo
+                    } else existing!!
                     val target = File(dir, "host-${System.currentTimeMillis()}.bin")
                     if (restore || Math.abs(f - 1.0) < 0.005) {
                         o.file.copyTo(target, overwrite = true)
                         hub.setFile(target, o.name, o.mime)
                         o.stretchedName = ""
+                        saveOrig(dir, g.id, o)
                     } else {
                         val semExt = o.name.replace(Regex("\\.[^.]+\$"), "")
                         val base = semExt.replace(Regex(" \\(\\d+ bpm\\)\$"), "")
@@ -834,6 +873,7 @@ object SessionController {
                         }
                         hub.setFile(target, newName, "audio/wav")
                         o.stretchedName = newName
+                        saveOrig(dir, g.id, o)
                         srv.scoreMarksFor(o.name)?.let { (m, off) ->
                             srv.setScoreMarks(newName, m.map { Math.round(it / f * 10.0) / 10.0 }, off)
                         }

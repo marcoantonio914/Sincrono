@@ -491,11 +491,26 @@ private fun SpeedCard(ui: UiState) {
     val score by SessionController.score.collectAsState()
     val busy by SessionController.speedBusy.collectAsState()
     val status by SessionController.speedStatus.collectAsState()
-    val canReset by SessionController.speedCanReset.collectAsState()
+    val canResetFlow by SessionController.speedCanReset.collectAsState()
+    val groupsInfo by SessionController.groups.collectAsState()
+    // o botão aparece sempre que algum áudio é uma cópia (nome "(N bpm).wav"), mesmo depois de reiniciar o app
+    val canReset = canResetFlow || groupsInfo.groups.any { it.file?.let { n -> Regex("\\(\\d+ bpm\\)\\.wav$").containsMatchIn(n) } == true }
+    var follow by rememberSaveable { mutableStateOf(false) }
     var from by rememberSaveable { mutableStateOf("") }
     var to by rememberSaveable { mutableStateOf("") }
     val fromShown = from.ifEmpty { (if (score.bpm > 0) Math.round(score.bpm).toInt() else Math.round(ui.metronome.bpm).toInt()).toString() }
     val toShown = to.ifEmpty { Math.round(ui.metronome.bpm).toInt().toString() }
+    // O áudio acompanha o metrônomo: refaz a cópia quando o BPM muda (e a música está parada)
+    LaunchedEffect(follow, ui.metronome.bpm, groupsInfo, busy) {
+        if (!follow || busy) return@LaunchedEffect
+        val bpm = Math.round(ui.metronome.bpm).toInt()
+        val name = groupsInfo.groups.firstOrNull { it.file != null }?.file ?: return@LaunchedEffect
+        val cur = Regex("\\((\\d+) bpm\\)\\.wav$").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: fromShown.toIntOrNull() ?: return@LaunchedEffect
+        if (Math.abs(bpm - cur) < 1) return@LaunchedEffect
+        if (groupsInfo.groups.any { it.playing }) return@LaunchedEffect   // volta a rodar quando a música parar
+        kotlinx.coroutines.delay(1500)
+        SessionController.changeSpeed(context, fromShown.toIntOrNull() ?: 0, bpm, false)
+    }
     Module("Velocidade do áudio", "mantém o tom") {
         Text(
             "Cria uma cópia mais lenta ou mais rápida de TODOS os áudios dos grupos, sem mudar o tom, e ajusta o metrônomo. Pare a música antes. O original fica guardado enquanto o app estiver aberto.",
@@ -513,6 +528,10 @@ private fun SpeedCard(ui: UiState) {
                 label = { Text("Tocar a (bpm)") }, singleLine = true, modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
             )
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Checkbox(checked = follow, onCheckedChange = { follow = it })
+            Text("O áudio acompanha o metrônomo (refaz a cópia quando o BPM muda, com a música parada)", Modifier.clickable { follow = !follow }, style = MaterialTheme.typography.bodySmall)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilledTonalButton(

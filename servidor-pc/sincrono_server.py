@@ -264,7 +264,7 @@ class Session:
         self.lock = threading.RLock()
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.state = {"bpm": 120.0, "beatsPerBar": 4, "playing": False, "startAt": None, "revision": -1, "epoch": EPOCH}
+        self.state = {"bpm": 120.0, "beatsPerBar": 4, "playing": False, "startAt": None, "revision": -1, "epoch": EPOCH, "silent": False}
         self.state_clients = []          # filas de eventos do metrônomo
         self.audio_clients = []          # (grupo, fila)
         self.group_names = {DEFAULT_GROUP: "Geral"}
@@ -321,6 +321,8 @@ class Session:
                 nxt.update(bpm=new_bpm, beatsPerBar=int(beats), startAt=keep)
             else:
                 nxt.update(bpm=float(bpm), beatsPerBar=int(beats), playing=True, startAt=start_at)
+            if kind != "pause" and "silent" in body:
+                nxt["silent"] = bool(body["silent"])        # relógio mudo: o cursor da partitura anda, mas sem clique
             nxt["revision"] = cur["revision"] + 1
             self.state = nxt
             clients = list(self.state_clients)

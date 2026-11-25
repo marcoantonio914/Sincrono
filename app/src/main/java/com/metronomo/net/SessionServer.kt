@@ -686,7 +686,9 @@ class SessionServer(
                 )
                 else -> current.copy(bpm = bpm, beatsPerBar = beats, playing = true, startAt = startAt)
             }
-            val updated = changed.copy(revision = current.revision + 1)
+            // relógio mudo (só partitura): o cursor anda, o clique não toca; sem o campo, mantém o que estava
+            val silentNow = if (type != "pause" && body.has("silent")) body.optBoolean("silent") else current.silent
+            val updated = changed.copy(revision = current.revision + 1, silent = silentNow)
             state = updated
             updated
         }

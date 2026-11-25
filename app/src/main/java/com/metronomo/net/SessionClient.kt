@@ -44,7 +44,7 @@ class SessionClient(
     }
 
     /** Devolve null se deu certo, ou uma mensagem de erro. */
-    suspend fun sendCommand(type: String, bpm: Int, beatsPerBar: Int, startAt: Long? = null): String? =
+    suspend fun sendCommand(type: String, bpm: Int, beatsPerBar: Int, startAt: Long? = null, silent: Boolean? = null): String? =
         withContext(Dispatchers.IO) {
             try {
                 val payload = JSONObject()
@@ -52,6 +52,7 @@ class SessionClient(
                     .put("bpm", bpm)
                     .put("beatsPerBar", beatsPerBar)
                     .apply { if (startAt != null) put("startAt", startAt) }
+                    .apply { if (silent != null) put("silent", silent) }
                     .toString()
                     .toByteArray(Charsets.UTF_8)
                 val c = open("/api/command", "POST")
