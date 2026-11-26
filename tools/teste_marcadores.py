@@ -80,6 +80,8 @@ try:
         m = api("/api/score")["marks"].get("m.wav")
         check("fluxo: 4 marcadores salvos em ordem, ajuste -150", m and len(m["marks"]) == 4 and m["offset"] == -150 and m["marks"] == sorted(m["marks"]), m)
         check("os marcadores têm ~0,7 s entre si", m and all(600 < b - a < 900 for a, b in zip(m["marks"][:3], m["marks"][1:3])), m)
+        r = pg.evaluate(("(()=>{const m1=%d;const S=window.sincronoScore; return S&&S.barStart?[S.barStart(0),S.barStart(1e9),S.barStart(m1)]:null})()") % (m["marks"][1] + m["offset"] + 5))
+        check("barStart: 1º compasso e último marcador (clique entra no compasso do áudio)", r and r[0] == 0 and abs(r[2] - (m["marks"][1] + m["offset"])) < 2 and abs(r[1] - (m["marks"][-1] + m["offset"])) < 2, (r, m))
         check("depois de salvar aparece Apagar marcadores", pg.is_visible("#marks-clear"))
         api("/api/audio/cmd?group=all", {"type": "stop"})
         # cliente não vê os controles

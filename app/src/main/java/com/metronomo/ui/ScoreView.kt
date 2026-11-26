@@ -49,6 +49,12 @@ fun ScoreWebView(baseUrl: String, height: Dp, host: Boolean = false, stage: Bool
             }
         },
     )
+    // o anfitrião manda comandos à página (alinhar ao trocar as caixas Metrônomo/Áudio): ver SessionController.liveToggle
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val me: (String) -> Unit = { js -> ref[0]?.post { ref[0]?.evaluateJavascript(js, null) } }
+        if (host) SessionController.scoreJs = me
+        onDispose { if (SessionController.scoreJs === me) SessionController.scoreJs = null }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             ref[0]?.evaluateJavascript("window.sincronoTick&&window.sincronoTick(${SessionController.scoreTick()})", null)

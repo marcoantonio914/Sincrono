@@ -312,6 +312,7 @@
   function playOrder(ms) {
     const n = ms.length;
     const order = [];
+    const passes = [];   // em que passada (estrofe) está cada compasso tocado
     const segno = {}, coda = {};
     ms.forEach((m, i) => { if (m.sound.segno) segno[m.sound.segno] = i; if (m.sound.coda) coda[m.sound.coda] = i; });
     const spans = {}; // início da casa -> {to, numbers}
@@ -333,7 +334,7 @@
         const play = jumped ? sp.numbers.includes(maxEnding) : sp.numbers.includes(pass);
         if (!play) { i = sp.to + 1; continue; }
       }
-      order.push(i);
+      order.push(i); passes.push(pass);
       if (jumped && m.sound.fine) break;
       if (jumped && m.sound.tocoda && coda[m.sound.tocoda] !== undefined) { i = coda[m.sound.tocoda]; continue; }
       if (m.repeatEnd && !jumped) {
@@ -347,6 +348,7 @@
       }
       i++;
     }
+    order.passes = passes;
     return order;
   }
 
@@ -418,10 +420,11 @@
       segs.push({ q0: cur, q1: m.lenQ, bpm });
       let acc = ms;
       for (const s of segs) { s.ms0 = acc; acc += (s.q1 - s.q0) * 60000 / s.bpm; s.ms1 = acc; }
-      sc.order.push({ k, m: seq[k], q0: q, ms0: ms, ms1: acc, segs });
+      sc.order.push({ k, m: seq[k], q0: q, ms0: ms, ms1: acc, segs, pass: seq.passes ? seq.passes[k] : 1 });
       ms = acc; q += m.lenQ;
     }
     sc.totalMs = ms;
+    sc.maxPass = sc.order.reduce((a, o) => Math.max(a, o.pass || 1), 1);   // > 1: a música tem estrofes (repetições)
     sc.totalQ = q;
 
     sc.locate = function (t) {

@@ -201,3 +201,17 @@ input[type=range].fader::-moz-range-thumb { width: 18px; height: 18px; border-ra
 .mx-card .mx-btn { width: auto; flex: none; min-height: 34px; padding: 0 12px; font-size: 13px; }
 .mx-card .muted { font-size: 12px; white-space: nowrap; }
 .mx-card select { width: auto; max-width: 45%; flex: none; }
+
+/* painel "pronto" por aparelho */
+.rd { font: 600 11px/1 var(--mono, ui-monospace, monospace); padding: 4px 7px; border-radius: 999px; white-space: nowrap; }
+.rd-ready { background: #e3f3e8; color: #1f7a46; }
+.rd-loading, .rd-wait { background: #fbeccd; color: #8a5200; }
+.rd-off { background: #f9dedc; color: #b3261e; }
+.ready-sum { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+.ready-ok { background: #e3f3e8; color: #1f7a46; }
+.ready-wait { background: #fbeccd; color: #6b4200; }
+
+/* estrofe atual */
+.gchip.verse { background: #1f6f5c; margin-left: 6px; }
+#score.stage #score-verse { position: fixed; top: 8px; right: 8px; z-index: 6; margin: 0; }
+body.stage-page #score-verse { position: fixed; top: 8px; right: 8px; z-index: 6; margin: 0; }

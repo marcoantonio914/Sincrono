@@ -120,6 +120,14 @@ class AudioHub(private val nowMs: () -> Double) {
         }
     }
 
+    /** Estado do áudio deste aparelho: none (grupo sem áudio), wait (ainda não apareceu), loading (baixando/decodificando), ready. */
+    fun deviceStatus(device: String): String {
+        val f = file ?: return "none"
+        val p = peers[device] ?: return "wait"
+        if (nowMs() - p.lastSeenMs >= PEER_TTL_MS) return "wait"
+        return if (p.readyId == f.id) "ready" else "loading"
+    }
+
     private fun register(query: Map<String, String>) {
         val device = query["device"].orEmpty()
         if (device.isEmpty()) return

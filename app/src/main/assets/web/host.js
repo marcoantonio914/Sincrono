@@ -188,10 +188,26 @@
     el.addEventListener('input', paint); paint();
     return el;
   }
+  function readyBadge(dev) {
+    const b = document.createElement('span');
+    const sem = dev.age >= 8000, t = sem ? 'sem sinal' : ({ ready: 'pronto', loading: 'carregando', wait: 'aguardando', none: '' })[dev.audio] || '';
+    b.className = 'rd ' + (sem ? 'rd-off' : 'rd-' + dev.audio); b.textContent = t; b.hidden = !t;
+    return b;
+  }
   function renderDevices() {
     const box = $('devices-list');
     if (!box || busy.size) return;
     box.textContent = '';
+    // Painel "pronto": quem já baixou/decodificou o áudio do seu grupo e pode tocar agora
+    const need = devices.filter((d) => d.audio !== 'none');
+    if (need.length) {
+      const ok = need.filter((d) => d.audio === 'ready' && d.age < 8000), bad = need.filter((d) => !(d.audio === 'ready' && d.age < 8000));
+      const p = document.createElement('p'); p.className = 'ready-sum ' + (bad.length ? 'ready-wait' : 'ready-ok');
+      p.textContent = bad.length
+        ? `Prontos para tocar: ${ok.length} de ${need.length}. Faltam: ${bad.map((d) => d.name + (d.age >= 8000 ? ' (sem sinal)' : d.audio === 'loading' ? ' (carregando)' : ' (aguardando o som)')).join(', ')}.`
+        : `Todos prontos para tocar (${ok.length} aparelho${ok.length === 1 ? '' : 's'}).`;
+      box.appendChild(p);
+    }
     for (const g of groupsInfo.groups) {
       const color = window.sincronoGroupColor(g.id);
       const devs = devices.filter((d) => d.group === g.id);
@@ -211,7 +227,7 @@
         const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Grupo de ' + dev.name);
         for (const o of groupsInfo.groups) sel.add(new Option(o.name, o.id, false, o.id === dev.group));
         sel.addEventListener('change', () => api('/api/groups', { op: 'assign', device: dev.id, group: sel.value }).then(refresh));
-        line.append(dn, sel); d.appendChild(line);
+        const st = readyBadge(dev); line.append(dn, st, sel); d.appendChild(line);
         d.appendChild(fader('d:' + dev.id, dev.level, color, (v) => api('/api/mix', { device: dev.id, level: v }), 'Volume de ' + dev.name));
         card.appendChild(d);
       }
@@ -231,6 +247,7 @@
       id: x.id, name: x.name || String(x.id).slice(0, 8),
       group: (groupsInfo.assign || {})[x.id] || 'g1',
       level: typeof mix[x.id] === 'number' ? mix[x.id] : 1,
+      audio: x.audio || 'none', age: typeof x.ageMs === 'number' ? x.ageMs : 0,
     }));
   }
 
@@ -320,8 +337,10 @@
         } else if (!metroPlaying && audioPlaying) {
           const T = serverNow() + 2000;
           let start;
-          if (hasPos) start = T - (msNow + 2000) / SC.scale(s.bpm);            // clique no compasso da partitura
-          else { const posT = (songPositionMs() || 0) + 2000; start = T + ((interval - (posT % interval)) % interval); }
+          const posT = (songPositionMs() || 0) + 2000, bs = SC && SC.barStart ? SC.barStart(posT) : null;
+          if (bs !== null) start = T + (bs - posT);                            // 1º tempo no início de um compasso do ÁUDIO (marcadores)
+          else if (hasPos) start = T - (msNow + 2000) / SC.scale(s.bpm);       // clique no compasso da partitura
+          else { const pT = (songPositionMs() || 0) + 2000; start = T + ((interval - (pT % interval)) % interval); }
           await cmd({ type: 'play', silent: false, startAt: Math.round(start) });
         }
       } else if (which === 'audio' && !audioOn) {

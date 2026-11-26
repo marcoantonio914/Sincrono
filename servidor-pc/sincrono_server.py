@@ -176,6 +176,17 @@ class Hub:
         with self.lock:
             return self.file if self.file and self.file["id"] == fid else None
 
+    def device_status(self, device):
+        """Estado do áudio deste aparelho: none (grupo sem áudio), wait (ainda não apareceu), loading (baixando/decodificando), ready."""
+        with self.lock:
+            f = self.file
+            if f is None:
+                return "none"
+            p = self.peers.get(device)
+            if not p or now_ms() - p[0] >= PEER_TTL_MS:
+                return "wait"
+            return "ready" if p[1] == f["id"] else "loading"
+
     def register(self, device, ready):
         if device:
             with self.lock:
@@ -854,7 +865,12 @@ class Session:
             for dev, d in self.devices.items():
                 out.append({"id": dev, "name": d.get("name") or dev[:8], "group": self.assign.get(dev, DEFAULT_GROUP),
                             "ageMs": int(now - d.get("seen", 0)), "level": self.mix.get(dev, 1.0)})
-            return sorted(out, key=lambda x: x["name"])
+        for o in out:                                   # fora do lock da sessão: cada grupo tem o seu
+            try:
+                o["audio"] = self.hub(o["group"]).device_status(o["id"])
+            except Exception:
+                o["audio"] = "none"
+        return sorted(out, key=lambda x: x["name"])
 
 
 SESSION = None

@@ -56,6 +56,8 @@ class CalibrationManager(
         val host: Boolean,
         val calibrated: Boolean,
         val me: Boolean,
+        /** Áudio do grupo neste aparelho: none | wait | loading | ready. */
+        val audio: String = "none",
     )
 
     data class Ui(
@@ -202,6 +204,7 @@ class CalibrationManager(
                     host = p.optBoolean("host"),
                     calibrated = p.optBoolean("calibrated"),
                     me = p.optString("id") == deviceId,
+                    audio = p.optString("audio", "none"),
                 )
             }
             if (list != ui.peers) publish { it.copy(peers = list) }

@@ -787,6 +787,18 @@ private fun HostMixer() {
     val cal by SessionController.calibration.collectAsState()
     val groups by SessionController.groups.collectAsState()
     Text("MIXER", style = LabelStyle)
+    // Painel "pronto": quem já baixou/decodificou o áudio do seu grupo e pode tocar agora
+    val needAudio = cal.peers.filter { it.audio != "none" }
+    if (needAudio.isNotEmpty()) {
+        val ok = needAudio.count { it.audio == "ready" }
+        val faltam = needAudio.filter { it.audio != "ready" }
+        Text(
+            if (faltam.isEmpty()) "Todos prontos para tocar ($ok ${if (ok == 1) "aparelho" else "aparelhos"})."
+            else "Prontos para tocar: $ok de ${needAudio.size}. Faltam: " + faltam.joinToString(", ") { it.name + (if (it.audio == "loading") " (carregando)" else " (aguardando o som)") } + ".",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (faltam.isEmpty()) Pal.Ok else Pal.Bad,
+        )
+    }
     for (g in groups.groups) {
         val color = groupColor(g)
         val devs = cal.peers.filter { groups.groupOf(it.id) == g.id }
@@ -810,7 +822,7 @@ private fun HostMixer() {
                     onFinish = { SessionController.setGroupVolume(g.id, it.toDouble()) })
                 devs.forEach { p ->
                     Fader(
-                        "${p.name}${if (p.me) " (este)" else ""}",
+                        "${p.name}${if (p.me) " (este)" else ""}" + when (p.audio) { "ready" -> "  ·  pronto"; "loading" -> "  ·  carregando…"; "wait" -> "  ·  aguardando o som"; else -> "" },
                         (levels[p.id] ?: 1.0).toFloat(),
                         key = p.id,
                         accent = color,

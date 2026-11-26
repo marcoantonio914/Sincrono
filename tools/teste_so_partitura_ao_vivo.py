@@ -61,6 +61,17 @@ try:
         pg.uncheck("#with-metro"); pg.wait_for_timeout(2500)
         pg.check("#with-audio"); pg.wait_for_timeout(5500)
         check("marcar Áudio com a partitura andando: o áudio entra", get("/api/audio?group=g1")["playing"])
+        # e) a mesma lógica pela função usada pela WebView do app: sincronoLive('audio', false, false) com áudio tocando
+        pg.evaluate("window.sincronoStage && 0")
+        pg.click("#stop-all"); pg.wait_for_timeout(2500)
+        pg.uncheck("#with-metro"); pg.check("#with-audio"); pg.click("#play-all"); pg.wait_for_timeout(7000)
+        pg.evaluate("document.getElementById('with-audio').checked = false")      # a caixa do app não existe aqui: simula o estado
+        pg.evaluate("window.sincronoLive('audio', false, false)"); pg.wait_for_timeout(4500)
+        st = get("/api/state")
+        check("sincronoLive (app): áudio pausa e relógio mudo assume", (not get("/api/audio?group=g1")["playing"]) and st["playing"] and st.get("silent") is True, st)
+        pg.evaluate("window.sincronoLive('metro', true, false)"); pg.wait_for_timeout(3000)
+        st = get("/api/state")
+        check("sincronoLive (app): metrônomo liga na posição, sem mudo", st["playing"] and st.get("silent") is False, st)
         check("sem erros de script", not erros, erros)
         b.close()
 finally:

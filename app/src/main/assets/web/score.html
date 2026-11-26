@@ -45,6 +45,7 @@
           <label class="muted">Atraso do toque (ms) <input id="marks-delay" type="number" min="0" max="500" value="120" style="width:5em"></label>
         </div>
         <div id="score-grp" class="gchip" hidden></div>
+        <span id="score-verse" class="gchip verse" hidden></span>
         <div id="score-view" tabindex="0" aria-label="Partitura com cursor"></div>
         <p id="score-info" class="muted" aria-live="polite"></p>
       </section>
@@ -65,7 +66,7 @@
         songState = nativeAudio === null ? null : { file: { id: 1, name: t.audioName || '' }, playing: !!t.audioPlaying, positionMs: nativeAudio, startAt: 0, stopAt: null };
         const metro = (typeof t.metro === 'number');
         nativeElapsed = metro ? t.metro : 0;
-        state = { playing: metro, bpm: t.bpm || 120, beatsPerBar: t.beats || 4, startAt: 1, revision: 0 };
+        state = { playing: metro, bpm: t.bpm || 120, beatsPerBar: t.beats || 4, startAt: 1, revision: 0, silent: !!t.silent };
         if (typeof t.now === 'number') { realNowAt = t.now; realNowStamp = performance.now(); }
       };
       // relógio REAL do servidor (o serverNow acima é só o tempo do metrônomo): usado pelo anfitrião ao mover a música

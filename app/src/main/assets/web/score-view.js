@@ -286,6 +286,7 @@
       svg.innerHTML = out.join('') + cursor;
       this.box.appendChild(svg);
       this.svg = svg;
+      this.applyVerse();
       this.curG = svg.querySelector('.cur');
       this.curHl = svg.querySelector('.hl');
       this.curLine = svg.querySelector('.ln');
@@ -559,7 +560,7 @@
         if (st !== nst) return;
         for (const ly of e.lyrics) {
           const tx = ly.text + (ly.syl === 'begin' || ly.syl === 'middle' ? ' -' : '');
-          out.push('<text x="' + f1(e.x) + '" y="' + f1((this.noStaff ? yt - 4 : yBottom + 42) + (ly.num - 1) * 14) + '" font-size="12" text-anchor="middle" fill="currentColor">' + esc(tx) + '</text>');
+          out.push('<text data-v="' + ly.num + '" x="' + f1(e.x) + '" y="' + f1((this.noStaff ? yt - 4 : yBottom + 42) + (ly.num - 1) * 14) + '" font-size="12" text-anchor="middle" fill="currentColor">' + esc(tx) + '</text>');
         }
       };
       for (const e of evs) {
@@ -769,6 +770,19 @@
       return { x: g.ix + this.slotX(g.lay, Math.min(Math.max(q, 0), g.lay.lenQ), g.scl), sys: g.sys, top, bottom, mx: g.x, mw: g.w };
     }
 
+    /** Destaca a estrofe atual (a passada da repetição): a linha de letra de mesmo número fica em destaque, as outras esmaecem.
+     *  Só age quando a partitura tem 2+ linhas de letra; com uma linha só (ex.: "1 a 4") nada muda. */
+    setVerse(p) { this.verse = p; this.applyVerse(); }
+    applyVerse() {
+      if (!this.svg) return;
+      const on = this.verse && this.maxVerse >= 2;
+      const cur = on ? Math.min(this.verse, this.maxVerse) : 0;
+      this.svg.querySelectorAll('text[data-v]').forEach((t) => {
+        const hit = !on || Number(t.getAttribute('data-v')) === cur;
+        t.setAttribute('opacity', hit ? '1' : '0.35');
+        t.setAttribute('font-weight', on && hit ? '700' : '400');
+      });
+    }
     setCursor(pos, follow) {
       this.pendingCursor = pos;
       if (!this.curG) return;

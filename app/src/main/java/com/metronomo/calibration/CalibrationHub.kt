@@ -34,6 +34,9 @@ class CalibrationHub(private val nowMs: () -> Double) {
         var route: String,
     )
 
+    /** Estado do áudio de cada aparelho (preenchido pelo SessionServer): none | wait | loading | ready. */
+    @Volatile var audioStatus: (String) -> String = { "none" }
+
     private val lock = Any()
     private val peers = LinkedHashMap<String, Peer>()
 
@@ -281,7 +284,8 @@ class CalibrationHub(private val nowMs: () -> Double) {
                     .put("host", p.isHost)
                     .put("calibrated", p.calibrated)
                     .put("canRecord", p.canRecord)
-                    .put("route", p.route),
+                    .put("route", p.route)
+                    .put("audio", audioStatus(peerId)),
             )
         }
         return JSONObject()

@@ -686,6 +686,14 @@ object SessionController {
      * Sem nada tocando não faz nada (vale no próximo Tocar).
      */
     fun liveToggle(which: String, on: Boolean) {
+        // Com partitura na tela, a página alinha pela posição na partitura (com marcadores de compasso): exato.
+        val js = scoreJs
+        if (js != null && _score.value.fileName.isNotEmpty()) {
+            val mo = if (which == "metro") on else playWithMetro.value
+            val ao = if (which == "audio") on else playWithAudio.value
+            js("window.sincronoLive&&window.sincronoLive('$which',$mo,$ao)")
+            return
+        }
         val ck = clock ?: return
         val c = client
         val pb = audioPlayback
@@ -719,7 +727,13 @@ object SessionController {
             } else if (which == "metro" && on && !metroPlaying && audioPlaying && c != null) {
                 val t = ck.nowServerMs() + 2000.0
                 val posT = (pb?.positionMs() ?: 0.0) + 2000.0
-                val start = t + ((interval - posT % interval) % interval)
+                // 1º tempo do clique no início de um compasso do ÁUDIO (marcadores); sem marcadores, na grade de batidas
+                val mk = server?.scoreMarksFor(_audio.value.fileName)
+                var bs: Double? = null
+                if (mk != null) {
+                    for (x in mk.first) { val v = x + mk.second; if (v <= posT + 1.0) bs = v else break }
+                }
+                val start = if (bs != null) t + (bs - posT) else t + ((interval - posT % interval) % interval)
                 error = c.sendCommand("play", bpmInt, m.beatsPerBar, Math.round(start), silent = false)
             } else if (which == "audio" && !on && audioPlaying && pb != null) {
                 error = pb.command("pause", null, "all")
@@ -1015,8 +1029,15 @@ object SessionController {
             .put("audioName", _audio.value.fileName)
             .put("now", ck.nowServerMs())
             .put("beats", s.beatsPerBar)
+            .put("silent", s.silent)
             .toString()
     }
+
+    /**
+     * Executa JavaScript na página da partitura do anfitrião (WebView), se ela estiver na tela. A página conhece a posição na
+     * partitura (com marcadores de compasso), então é ela quem alinha áudio, clique e relógio mudo ao trocar as caixas.
+     */
+    @Volatile var scoreJs: ((String) -> Unit)? = null
 
     /** Nome do arquivo da partitura da sessão ("" se não há); null se não deu para perguntar ao servidor agora. */
     private fun fetchScoreName(baseUrl: String): String? = try {

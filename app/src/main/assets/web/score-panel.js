@@ -90,7 +90,9 @@
     box.style.height = stage ? Math.max(160, window.innerHeight - (document.body.classList.contains('stage-page') ? 0 : 12)) + 'px' : '';
     view.onPick = (h) => { if (canSeek()) onPickMeasure(h); };
     view.setScore(score, partIndex());
+    view.setVerse(shownPass || 1);
     if (m === 'fit') fitAll();
+    paintVerse();
     setupTimeline();
     drawnGroup = myGroup();
     paintGroup();
@@ -174,6 +176,16 @@
       publish(); showInfo(); setupTimeline();
     } catch { /* servidor sem partitura: painel fica escondido */ }
     finally { polling = false; }
+  }
+
+  // ---------- estrofe atual (repetições): "Estrofe 2/4" e a linha de letra correspondente em destaque
+  let shownPass = 0;
+  function paintVerse() {
+    const el = $('score-verse');
+    if (!el) return;
+    const n = score && score.maxPass > 1 ? score.maxPass : 0;
+    el.hidden = !n;
+    if (n) el.textContent = 'Estrofe ' + shownPass + '/' + n;
   }
 
   // ---------- cursor: áudio tocando > metrônomo > áudio pausado > início
@@ -315,7 +327,51 @@
   window.sincronoScore = {
     ms: () => (score ? scoreMs() : null),
     scale: (bpm) => (score ? bpm / (score.initialBpm || bpm) : 1),
+    // ms do ÁUDIO em que começa o compasso tocado mais recente até `posMs` (null sem marcadores): o clique entra aí.
+    barStart: (posMs) => {
+      const am = audioMarks(); if (!am) return null;
+      let bs = 0; for (const x of am.marks) { const v = x + (am.offset || 0); if (v <= posMs + 1) bs = v; else break; }
+      return bs;
+    },
     audioPos: (ms) => { const am = audioMarks(); return Math.max(0, score && am ? score.toAudio(am.marks, am.offset, ms) : ms); },
+  };
+  // O anfitrião do APP (caixas Metrônomo/Áudio nativas) chama isto na página da partitura: mesma lógica de host.js, mas
+  // alinhando pela posição na partitura (com marcadores). Devolve false se não houver partitura.
+  window.sincronoLive = async (which, metroOn, audioOn) => {
+    if (!score) return false;
+    const a = typeof songState !== 'undefined' ? songState : null;
+    const audioPlaying = !!(a && a.file && a.playing), hasAudio = !!(a && a.file);
+    const metroPlaying = typeof state !== 'undefined' && !!state.playing;
+    if (!audioPlaying && !metroPlaying) return true;
+    const bpm = state.bpm, beats = state.beatsPerBar, scale = bpm / (score.initialBpm || bpm);
+    const msNow = scoreMs(), now = realNow();
+    const cmd = (extra) => postQuiet('/api/command', Object.assign({ bpm, beatsPerBar: beats }, extra));
+    const aud = (body) => postQuiet('/api/audio/cmd?group=all', body);
+    if (!metroOn && !audioOn) {
+      if (metroPlaying) await cmd({ type: 'settings', silent: true });
+      else if (audioPlaying) {
+        const T = now + 1200;
+        await cmd({ type: 'play', silent: true, startAt: Math.round(T - (msNow + 1200) / scale) });
+        await aud({ type: 'pause' });
+      }
+    } else if (which === 'metro' && !metroOn) {
+      if (metroPlaying) await cmd({ type: 'pause' });
+    } else if (which === 'metro' && metroOn) {
+      if (metroPlaying && state.silent) await cmd({ type: 'settings', silent: false });
+      else if (!metroPlaying && audioPlaying) {
+        const T = now + 2000, posT = (typeof songPositionMs === 'function' ? (songPositionMs() || 0) : 0) + 2000, bs = window.sincronoScore.barStart(posT);
+        // o 1º tempo do clique cai no início de um compasso DO ÁUDIO (marcadores); sem marcadores, pela posição na partitura
+        await cmd({ type: 'play', silent: false, startAt: Math.round(bs !== null ? T + (bs - posT) : T - (msNow + 2000) / scale) });
+      }
+    } else if (which === 'audio' && !audioOn) {
+      if (audioPlaying) await aud({ type: 'pause' });
+    } else if (which === 'audio' && audioOn && !audioPlaying && metroPlaying && hasAudio) {
+      const T = now + 2000, msT = msNow + 2000 * scale;
+      await aud({ type: 'seek', positionMs: Math.round(window.sincronoScore.audioPos(msT)), startAt: T });
+      await aud({ type: 'play', startAt: T });
+    }
+    poll(true);
+    return true;
   };
   window.sincronoScoreRedraw = () => { try { if (score && !sec.hidden) draw(); } catch { /* */ } };
   window.sincronoStage = (v) => setStage(v);   // usado pela aba PLAYLIST
@@ -333,6 +389,8 @@
     if (key === last) return;
     last = key;
     view.setCursor({ k: loc.k, q: loc.q }, true);
+    const pass = (score.order[loc.k] && score.order[loc.k].pass) || 1;
+    if (pass !== shownPass) { shownPass = pass; view.setVerse(pass); paintVerse(); }
   }, 40);
 
   // ---------- botões

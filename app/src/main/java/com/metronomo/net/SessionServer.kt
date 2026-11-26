@@ -84,7 +84,9 @@ class SessionServer(
         Thread(r, "metronomo-heartbeat").apply { isDaemon = true }
     }
     private var serverSocket: ServerSocket? = null
-    private val calibration = CalibrationHub { nowMs() }
+    private val calibration = CalibrationHub { nowMs() }.also { c ->
+        c.audioStatus = { dev -> hub(groups.assignments()[dev] ?: Groups.DEFAULT_ID)?.deviceStatus(dev) ?: "none" }
+    }
 
     /** Grupos ("ilhas"): cada um tem o seu arquivo e o seu estado de áudio; o relógio é um só. */
     val groups = Groups()
