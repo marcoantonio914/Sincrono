@@ -58,11 +58,14 @@
       let state = { playing: false, bpm: 120, beatsPerBar: 4, startAt: 1, revision: 0 };
       let nativeElapsed = 0, nativeAudio = null;
       function serverNow() { return nativeElapsed + 1; }
-      function songPositionMs() { return nativeAudio === null ? 0 : nativeAudio; }
+      let nativeAudioStamp = 0, nativeAudioPlaying = false;
+      // posição do áudio entre dois envios do app: avança com o relógio local (o envio é a cada ~250 ms)
+      function songPositionMs() { return nativeAudio === null ? 0 : nativeAudio + (nativeAudioPlaying ? performance.now() - nativeAudioStamp : 0); }
       window.sincronoTick = function (t) {
         if (!t) return;
         songGroup = t.group || 'g1';
         nativeAudio = (typeof t.audio === 'number') ? t.audio : null;
+        nativeAudioStamp = performance.now(); nativeAudioPlaying = !!t.audioPlaying;
         songState = nativeAudio === null ? null : { file: { id: 1, name: t.audioName || '' }, playing: !!t.audioPlaying, positionMs: nativeAudio, startAt: 0, stopAt: null };
         const metro = (typeof t.metro === 'number');
         nativeElapsed = metro ? t.metro : 0;
